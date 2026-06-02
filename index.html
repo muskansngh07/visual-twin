@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>PlantFATE Visual Twin</title>
+        <link rel="stylesheet" href="style.css"> 
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+    </head>
+    <body>
+        <div id="main-container"> 
+
+            <main id="simulation-viewport" class="viewport-box">
+                
+                <div id="viewport-profiles">
+                    
+                    <div class="hud-panel" id="hud-species-1">
+                        <h3 class="hud-species-name">Species 1 Profile</h3>
+                        <hr class="hud-divider">
+                        <div class="hud-metric"><span class="label">Basal Diameter:</span><span id="s1-basal-dia" class="val">--</span></div>
+                        <div class="hud-metric"><span class="label">Canopy Shape (m):</span><span id="s1-shape-m" class="val">2.5</span></div>
+                        <div class="hud-metric"><span class="label">Canopy Shape (n):</span><span id="s1-shape-n" class="val">1.8</span></div>
+                        <div class="hud-metric"><span class="label">Branch Angle:</span><span id="s1-branch-angle" class="val">0.70</span></div>
+                    </div>
+
+                    <div class="hud-panel" id="hud-species-2">
+                        <h3 class="hud-species-name">Species 2 Profile</h3>
+                        <hr class="hud-divider">
+                        <div class="hud-metric"><span class="label">Basal Diameter:</span><span id="s2-basal-dia" class="val">--</span></div>
+                        <div class="hud-metric"><span class="label">Canopy Shape (m):</span><span id="s2-shape-m" class="val">1.8</span></div>
+                        <div class="hud-metric"><span class="label">Canopy Shape (n):</span><span id="s2-shape-n" class="val">1.8</span></div>
+                        <div class="hud-metric"><span class="label">Branch Angle:</span><span id="s2-branch-angle" class="val">0.55</span></div>
+                    </div>
+
+                    <div class="hud-panel" id="hud-species-3">
+                        <h3 class="hud-species-name">Species 3 Profile</h3>
+                        <hr class="hud-divider">
+                        <div class="hud-metric"><span class="label">Basal Diameter:</span><span id="s3-basal-dia" class="val">--</span></div>
+                        <div class="hud-metric"><span class="label">Canopy Shape (m):</span><span id="s3-shape-m" class="val">1.8</span></div>
+                        <div class="hud-metric"><span class="label">Canopy Shape (n):</span><span id="s3-shape-n" class="val">2.3</span></div>
+                        <div class="hud-metric"><span class="label">Branch Angle:</span><span id="s3-branch-angle" class="val">0.60</span></div>
+                    </div>
+
+                </div>
+            </main>
+
+            <div id="bottom-bar">
+                <div id="timeline">
+                    <div id="year-row">
+                        <div id="year-display">2000</div>
+                        <div id="year-sub">
+                            <div id="year-cohort-line">— cohorts</div>
+                            <div>N = Next · P = Prev · Space = Play</div>
+                        </div>
+                        <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
+                            <button class="btn btn-icon" id="btn-prev" title="Previous year">&#9664;</button>
+                            <button class="btn btn-icon active" id="btn-play" title="Play/Pause">&#9646;&#9646;</button>
+                            <button class="btn btn-icon" id="btn-next" title="Next year">&#9654;</button>
+                            <button class="btn" id="btn-reset">Reset</button>
+                        </div>
+                    </div>
+            
+                    <div id="progress-wrap">
+                        <div id="progress-fill" style="width:0%"></div>
+                        <div id="progress-thumb" style="left:0%"></div>
+                    </div>
+            
+                    <div id="controls-row">
+                        <span id="keys">
+                            <span class="key"><span class="keycap">N</span> next</span>
+                            <span class="key"><span class="keycap">P</span> prev</span>
+                            <span class="key"><span class="keycap">Space</span> play/pause</span>
+                            <span class="key"><span class="keycap">R</span> reset camera</span>
+                        </span>
+                        <span id="speed-label">speed:</span>
+                        <button class="btn" id="spd-slow">0.5×</button>
+                        <button class="btn active" id="spd-norm">1×</button>
+                        <button class="btn" id="spd-fast">2×</button>
+                    </div>
+                </div>
+            </div>
+
+        </div> <script src="app.js"></script> 
+        <script src="plantfate_data.js"></script>
+    </body>
+</html>
