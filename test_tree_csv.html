@@ -15,22 +15,17 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
     <script>
-        // ==========================================
-        // === 1. BASIC ENVIRONMENT & LIGHTING SETUP ===
-        // ==========================================
         const scene = new THREE.Scene();
 
-        // High intensity ambient light to prevent image textures from turning muddy
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); 
         scene.add(ambientLight);
-
         const sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
         sunLight.position.set(10, 20, 15); 
         scene.add(sunLight);
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
         
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
 
@@ -42,50 +37,45 @@
         const gridHelper = new THREE.GridHelper(20, 20, 0x555555, 0x222222);
         scene.add(gridHelper);
 
-        // Instantiate a single global texture loader for performance efficiency
-
-        // ==========================================
-        // === 2. DYNAMIC SPECIES & ASSET CONFIG =====
-        // ==========================================
         const SPECIES_CONFIG = {
-    1: {
-        name: "Species 1",
-        m: 2.5, n: 1.8,
-        leafUrl: 'images/tree1.png',
-        leafSizeFactor: 2.0,    
-        branchAngle: 0.70,      
-        lengthTaper: 0.68,
-        alphaTest: 0.08,       // defines visibility in terms of pixels  
-    },
-    2: {
-        name: "Species 2",
-        m: 1.8, n: 1.8,        
-        leafUrl: 'images/tree2.png',
-        leafSizeFactor: 1.0,
-        branchAngle: 0.55,    
-        lengthTaper: 0.70,
-        alphaTest: 0.15,
-    },        
-    3: {
-        name: "Species 3",
-        m: 1.8, n: 2.3,
-        leafUrl: 'images/tree3.png',
-        leafSizeFactor: 1.5,
-        branchAngle: 0.60,
-        lengthTaper: 0.75,
-        alphaTest: 0.08,
-    }
-};
+        1: {
+            name: "Species 1",
+            m: 2.5, n: 1.8,
+            leafUrl: 'images/tree1.png',
+            leafSizeFactor: 2.0,    
+            branchAngle: 0.70,      
+            lengthTaper: 0.68,
+            alphaTest: 0.08,       // defines visibility in terms of pixels  
+        },
+        2: {
+            name: "Species 2",
+            m: 1.8, n: 1.8,        
+            leafUrl: 'images/tree2.png',
+            leafSizeFactor: 1.0,
+            branchAngle: 0.55,    
+            lengthTaper: 0.70,
+            alphaTest: 0.15,
+        },        
+        3: {
+            name: "Species 3",
+            m: 1.8, n: 2.3,
+            leafUrl: 'images/tree3.png',
+            leafSizeFactor: 1.5,
+            branchAngle: 0.60,
+            lengthTaper: 0.75,
+            alphaTest: 0.08,
+        }   
+    };
 
     const textureLoader = new THREE.TextureLoader();
         const LEAF_TEXTURES = {};
         [1, 2, 3].forEach(id => {
             LEAF_TEXTURES[id] = textureLoader.load(SPECIES_CONFIG[id].leafUrl);
         });
-        // ==========================================
-        // === 3. COHORT SPECIES PROFILE EQUATION ===
-        // ==========================================
-        function getPlantFateRadius(z, H, speciesId) {
+    
+    // PlantFATE dynamics
+    function getPlantFateRadius(z, H, speciesId) 
+    {
             const config = SPECIES_CONFIG[speciesId] || SPECIES_CONFIG[1];
             const r0 = 1.6; 
             const m = config.m;  
@@ -95,97 +85,91 @@
 
             const ratio = z / H;
             return r0 * m * n * Math.pow(ratio, n - 1) * Math.pow(1 - Math.pow(ratio, n), m - 1);
-        }
-
-
-        // ==========================================
-        // === 4. TEXTURED PROCEDURAL BRANCH ENGINE ==
-        // ==========================================
-        function createBranch(parentContainer, length, thickness, currentDepth, currentHeight, speciesId, maxDepth = 4) {
-            const config = SPECIES_CONFIG[speciesId] || SPECIES_CONFIG[1];
-            const branchGroup = new THREE.Group();
-
-            // Draw Wood Segment Cylinders
-            const geometry = new THREE.CylinderGeometry(thickness * 0.7, thickness, length, 8);
-            const material = new THREE.MeshStandardMaterial({ 
-                color: 0x422f1e, 
-                roughness: 0.95 
-            });
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.position.y = length / 2;
-            branchGroup.add(mesh);
-
-            // Connective Joint Sphere (closes cylinder gaps smoothly)
-            const jointGeo = new THREE.SphereGeometry(thickness * 0.7, 8, 8);
-            const jointMat = new THREE.MeshStandardMaterial({ color: 0x422f1e, roughness: 0.95 });
-            const joint = new THREE.Mesh(jointGeo, jointMat);
-            joint.position.y = length;
-            branchGroup.add(joint);
-
-            const segmentHeightGain = length; 
-            const absoluteZ = currentHeight + segmentHeightGain;
-            const totalTreeHeight = 8; 
-
-            // BASE CASE: Outer twigs reached. Create high-detail Image Billboards!
-            // BASE CASE: Outer twigs reached. Create high-detail Image Billboards!
-            if (currentDepth >= maxDepth) {
-
-        const leafMap = LEAF_TEXTURES[speciesId]; // pre-cached, not re-loaded
-        const leafMat = new THREE.MeshStandardMaterial({
-    map: leafMap,
-    transparent: true,
-    alphaTest: config.alphaTest, // per-species value from config
-    side: THREE.DoubleSide,
-    roughness: 0.85,
-    depthWrite: false, // CRITICAL — prevents z-fighting
-    });
-
-    const planeSize = length * config.leafSizeFactor;
-    const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
-
-    // Two planes at 90° = cross. Looks full from all angles.
-    const plane1 = new THREE.Mesh(planeGeo, leafMat);
-    const plane2 = new THREE.Mesh(planeGeo, leafMat);
-    plane2.rotation.y = Math.PI / 2;
-
-    const leafGroup = new THREE.Group();
-    leafGroup.add(plane1);
-    leafGroup.add(plane2);
-    leafGroup.position.y = length; // exactly at tip, not scattered
-
-    branchGroup.add(leafGroup);
-    parentContainer.add(branchGroup);
-    return;
     }
 
-            // Metric dimension arrays computed per unique strategy configurations
-            const nextThickness = thickness * 0.64;
-            const nextLength = length * config.lengthTaper; 
-            const angle = config.branchAngle;               
+    // Procedural branch creation
+    function createBranch(parentContainer, length, thickness, currentDepth, currentHeight, speciesId, maxDepth = 4) 
+    {
+        const config = SPECIES_CONFIG[speciesId] || SPECIES_CONFIG[1];
+        const branchGroup = new THREE.Group();
 
-            // 4-Way Whorled Processing Loop
-            const branchCount = 4;
-            const clusterRotationOffset = Math.random() * Math.PI * 2; 
+        // Draw Wood Segment Cylinders
+        const geometry = new THREE.CylinderGeometry(thickness * 0.7, thickness, length, 8);
+        const material = new THREE.MeshStandardMaterial({ 
+            color: 0x422f1e, 
+            roughness: 0.95 
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.y = length / 2;
+        branchGroup.add(mesh);
 
-            for (let i = 0; i < branchCount; i++) {
-                const twist = clusterRotationOffset + (i * (Math.PI * 2 / branchCount));
+        // Connective Joint Sphere (closes cylinder gaps smoothly)
+        const jointGeo = new THREE.SphereGeometry(thickness * 0.7, 8, 8);
+        const jointMat = new THREE.MeshStandardMaterial({ color: 0x422f1e, roughness: 0.95 });
+        const joint = new THREE.Mesh(jointGeo, jointMat);
+        joint.position.y = length;
+        branchGroup.add(joint);
 
-                const childContainer = new THREE.Group();
-                childContainer.position.y = length; 
-                childContainer.rotation.set(angle, twist, 0, 'YXZ'); 
-                branchGroup.add(childContainer);
+        const segmentHeightGain = length; 
+        const absoluteZ = currentHeight + segmentHeightGain;
+        const totalTreeHeight = 8; 
 
-                createBranch(childContainer, nextLength, nextThickness, currentDepth + 1, absoluteZ, speciesId, maxDepth);
-            }
+        //Base Case ; Leaves to now be generated 
+        if (currentDepth >= maxDepth) 
+        {
+            const leafMap = LEAF_TEXTURES[speciesId]; // pre-cached, not re-loaded
+            const leafMat = new THREE.MeshStandardMaterial({
+                map: leafMap,
+                transparent: true,
+                alphaTest: config.alphaTest, 
+                side: THREE.DoubleSide,
+                roughness: 0.85,
+                depthWrite: false, // prevents z-fighting
+            });
+
+            const planeSize = length * config.leafSizeFactor;
+            const planeGeo = new THREE.PlaneGeometry(planeSize, planeSize);
+
+            // Two planes at 90° = cross. Looks full from all angles.
+            const plane1 = new THREE.Mesh(planeGeo, leafMat);
+            const plane2 = new THREE.Mesh(planeGeo, leafMat);
+            plane2.rotation.y = Math.PI / 2;
+
+            const leafGroup = new THREE.Group();
+            leafGroup.add(plane1);
+            leafGroup.add(plane2);
+            leafGroup.position.y = length; // exactly at tip, not scattered
+
+            branchGroup.add(leafGroup);
+            parentContainer.add(branchGroup);
+            return;
+        }
+
+        // Metric dimension arrays computed per unique strategy configurations
+        const nextThickness = thickness * 0.64;
+        const nextLength = length * config.lengthTaper; 
+        const angle = config.branchAngle;               
+
+        // 4-Way Whorled Processing Loop
+        const branchCount = 4;
+        const clusterRotationOffset = Math.random() * Math.PI * 2; 
+
+        for (let i = 0; i < branchCount; i++) 
+        {
+            const twist = clusterRotationOffset + (i * (Math.PI * 2 / branchCount));
+
+            const childContainer = new THREE.Group();
+            childContainer.position.y = length; 
+            childContainer.rotation.set(angle, twist, 0, 'YXZ'); 
+            branchGroup.add(childContainer);
+
+            createBranch(childContainer, nextLength, nextThickness, currentDepth + 1, absoluteZ, speciesId, maxDepth);
+        }
 
             parentContainer.add(branchGroup);
         }
 
-
-        // ==========================================
-        // === 5. PARSE FILE STREAM RECORDS DIRECTLY ==
-        // ==========================================
-        // Mock dataset array structured precisely to parse row trends from your cohort csv entries
+        // Mock dataset array structured precisely to parse row trends from cohort csv entries
         const mockCohortPropsRows = [
             { species: 1, basal_diameter: 0.40, worldX: -20, worldZ: 0 }, 
             { species: 2, basal_diameter: 0.28, worldX:  0, worldZ: 0 }, 
@@ -193,7 +177,8 @@
         ];
 
         // Process data pipeline execution loop
-        mockCohortPropsRows.forEach(dataRow => {
+        mockCohortPropsRows.forEach(dataRow => 
+        {
             const treeAnchor = new THREE.Group();
             treeAnchor.position.set(dataRow.worldX, 0, dataRow.worldZ);
             scene.add(treeAnchor);
@@ -205,10 +190,6 @@
             createBranch(treeAnchor, initialTrunkLength, baseThickness, 0, 0, dataRow.species, maxDepth);
         });
 
-
-        // ==========================================
-        // === 6. RUN ENGINE FRAME RENDERING LOOP ===
-        // ==========================================
         function animate() {
             requestAnimationFrame(animate);
             controls.update();
