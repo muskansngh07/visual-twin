@@ -1,0 +1,11 @@
+1. cohortNum - Group to which the tree belongs.
+
+2. basal_diameter - Refers to trunk's cross sectional diameter on the ground just before the root flayers. 
+
+3. dbh - Refers to diameter at breast height. It is the trunk's diameter before it starts splitting into branches. 
+
+4. mort - Refers to mortality. 
+
+5. fec - Refers to fecundity. Signifies the reproductive nature of the tree. Mortality tends to shrink the populatiob whereas fecundity tends to expand it. 
+
+6. 
