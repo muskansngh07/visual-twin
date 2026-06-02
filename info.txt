@@ -8,4 +8,12 @@
 
 5. fec - Refers to fecundity. Signifies the reproductive nature of the tree. Mortality tends to shrink the populatiob whereas fecundity tends to expand it. 
 
-6. 
+6. total_biomass - Refers to total mass of organic living mass in the tree, usually measured as dry weight in kg.
+
+7. agb - Refers to above ground biomass. This is basically leaves, trunks, and branches.
+
+8. lai - Refers to leaf area index. Tells how much sq. meters of leaf surface hangs above a unit sq. meter of ground.
+
+9. rgr - Refers to relative growth rate. Represents how much a tree grows relative to its current size.
+
+10. gpp - Refers to gross primary production. It is the total amount of chemical energy that the leaves/ canopy capture from sunlight through photosynthesis. 
