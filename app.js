@@ -83,6 +83,8 @@ function calculate_cohort_instantaneous_rates(D,lai,gpp,t=traits){
     };
 }
 
+// SPECIFIC CONFIGURATION
+// Species-specific settings
 const SPECIES_CONFIG={
     1:{
         leafUrl:'images/tree1.png',
