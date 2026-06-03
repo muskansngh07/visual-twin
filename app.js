@@ -141,3 +141,58 @@ const BARK_MAT={};
 
 // Geometry only tree builder 
 
+const _dummy=new THREE.Object3D();
+const _up=new THREE.Vector3(0,1,0);
+const _tangent=new THREE.Vector3();
+const _axisX=new THREE.Vector3();
+
+// Bark Geometry which is a cylinder
+function collectBranchGeometries(barkGeos,leafGeos,length,thickness,depth,speciesID,maxDepth,worldMatrix){
+    const cgf=SPECIES_CONFIG[speciesID]||SPECIES_CONFIG[1];
+    const cylGeo=new THREE.CylinderGeometry(thickness*0.7,thickness,length,6);
+    cylGeo.translate(0,length/2,0);
+    cylGeo.applyMatrix4(worldMatrix);
+    barkGeos.push(cylGeo);
+    const tipMatrix=worldMatrix.clone();
+    tipMatrix.multiply(new THREE.Matrix4().makeTranslation(0,length,0));
+
+    // Base case- leaf cross planes 
+    if(depth>=maxDepth){
+        const planeSize=length*cfg.leafSizeFactor;
+        const pGeo=new THREE.PlaneGeometry(planeSize,planeSize);
+        performance.translate(0,planeSize/2,0);
+
+        // plane 1
+        const p1=pGeo.clone();
+        p1.applyMatrix4(tipMatrix);
+        leafGeos.push(p1);
+
+        // plane 2 at 90 degrees to p1
+        const p2=pGeo.clone();
+        const rot=new THREE.Matrix4.makeRotationY(Math.PI/2);
+        p2.applyMatrix4(rot);
+        p2.applyMatrix4(tipMatrix);
+        leafGeos.push(p2);
+
+        pGeo.dispose();
+        return;
+    }
+
+    // recurse 
+    const nextLength=length*cfg.lengthTaper;
+    const nextThickness=thickness*0.64;
+    const angle=cfg.branchAngle;
+    const rotOffset=Math.random()*Math.pi*2;
+    for(let i=0;i<4;i++){
+        const twist=rotOffset+i*(Math.PI/2);
+        const childMatrix=tipMatric.clone();
+        childMatrix.multiply(
+            new THREE.Matrix4().makeRotationFromEuler(
+                new THREE.Euler(angle,twist,0,'YXZ')
+            )
+        );
+        collectBranchGeometries(barkGeos,leafGeos,nextLength,nextThickness,depth+1,speciesID,maxDepth,childMatrix);
+    }
+
+}
+
