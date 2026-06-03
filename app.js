@@ -106,3 +106,11 @@ const SPECIES_CONFIG={
         alphaTest:0.08
     }
 };
+
+// Species-specific bark colours 
+const BARK_COLOR={
+    1:new THREE.Color(0x4a2c0a),
+    2:new THREE.Color(0x3b2508),
+    3:new THREE.Color(0x5c3a12)
+};
+
