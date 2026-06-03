@@ -1,198 +1,425 @@
-import { SIGNED_R11_EAC_Format } from "three";
 
-// PlantFATE Maths
-const traits={
-    Hm:35.0,   // maximum achievable height
-    a:120.0,   // stem slenderness ratio
-    c:400.0,   // crown-to-spawood ratio
-    eta_c:0.7, // crown shape tapering coefficient
-    rho_s:600, // wood density
-    lambda_l:0.12, // leaf mass per area
-    zeta:0.08, // root to leaf coordinating ratio
-    f_cr:0.47, // coarse root fraction
-    fr_max:0.25, // max reproductive energy allocation
-    Dmat:0.3, //maturity diameter threshold
-    a2:10.0, // sensitivity paramter for maturity scaling
-    m_seed:0.002, // single seed dry weight
-    c_acc:0.3, // accessory metabolic seed multiplier cost
-    nu_H: 0.0002 // huber value parameter
-};
 
-function tree_height(Hm, D,a){
-    return Hm*(1-Math.exp((-a*D)/Hm));
-}
-
-function crown_projection_area(c,a,H,D){
-    return Math.PI*c*H*D/(4*a);
-}
-
-function basal_sapwood_area(nu_H,lai,Ac){
-    return nu_H*lai*Ac;
-
-}
-
-function coarse_root_mass(rho_s,eta_c,D,H,c,a,f_cr){
-    const m_trunk=rho_s*Math.PI*eta_c*D*D*H/4;
-    const m_branch=rho_s*Math.PI*c*Math.pow(D,5/2)*Math.sqrt(H)/(12*a);
-    const agb=m_trunk+m_branch; // above ground biomass
-    const m_cr=f_cr*agb; // below ground coarse anchors
-    return {m_trunk,m_branch,agb,m_cr};
-}
-
-function leaf_and_root_biomass(lambda_l,zeta,lai,Ac){
-    const ml=lambda_l*lai*Ac;
-    const m_fr=zeta*ml;
-    return {ml,m_fr};
-
-}
-
-function calculate_cohort_instantaneous_rates(D,lai,gpp,t=traits){
-    const H=tree_height(t.Hm,D,t.a);
-    const Ac=crown_projection_area(t.c,t.a,H,D);
-    const As=basal_sapwood_area(t.nu_H,lai,Ac);
-    const wood=coarse_root_mass(t.rho_s,t.eta_c,D,H,t.c,t.a,t.f_cr);
-    const fine=leaf_and_root_biomass(t.lambda_l,t.zeta,lai,Ac);
-    const total_biomass=wood.agb+wood.m_cr+fine.ml+fine.m_fr;
-
-    // respiration and turnover loss
-    const R_maintenance=(0.01*wood.agb)+(0.05*fine.ml)+(0.03*fine.m_fr);
-    const T_turnover=(fine.ml/1.5)+(fine.m_fr/0.8);
-    const cbio=0.5; //carbon conversion index weight
-    const y=0.75; //efficiency multiplier constant
-    const Pnet=cbio*y*(gpp-R_maintenance)-T_turnover;
-    const dB_dt=Math.max(Pnet,0);
-
-    // energy budget partitioning
-    const fr_D = t.fr_max / (1 + Math.exp(t.a2 * (1 - D / t.Dmat)));
-    const growth_biomass = (1 - fr_D) * dB_dt;
-    const reproductive_biomass = fr_D * dB_dt;
-
-    // Differential Structural Geometry Rates
-    const structural_resistance = 5.0; // Geometric derivative scaling constant
-    const dD_dt = growth_biomass / structural_resistance;
-
-    // Demographic Vectors
-    const fec = reproductive_biomass / (t.m_seed * (1 + t.c_acc));
-    // Old age physical vulnerability scales exponentially with proximity to max height Hm
-    const mort = (0.01 * Math.exp(H / t.Hm)) + (dD_dt < 0.001 ? 0.15 : 0.01);
-
-    return {
-        dD_dt,        // Radial change vector (used by Function 2)
-        fec,          // Birth multiplier rate (used by Function 2)
-        mort,         // Death reduction rate (used by Function 2)
-        agb: wood.agb,
-        total_biomass
-    };
-}
-
-// SPECIFIC CONFIGURATION
-
-// Species-specific settings
-const SPECIES_CONFIG={
-    1:{
-        leafUrl:'images/tree1.png',
-        leafSizeFactor:2.0,
-        branchAngle:0.70,
-        lengthTaper:0.68,
-        alphaTest:0.08
-    },
-    2:{
-        leafUrl:'images/tree2.png',
-        leafSizeFactor:1.0,
-        branchAngle:0.55,
-        lengthTaper:0.70,
-        alphaTest:0.08
-    },
-    3:{
-        leafUrl:'images/tree3.png',
-        leafSizeFactor:1.5,
-        branchAngle:0.60,
-        lengthTaper:0.75,
-        alphaTest:0.08
-    }
-};
-
-// Species-specific bark colours 
-const BARK_COLOR={
-    1:new THREE.Color(0x4a2c0a),
-    2:new THREE.Color(0x3b2508),
-    3:new THREE.Color(0x5c3a12)
-};
-
-// TEXTURE AND MATERIAL CACHE
-
-const tex_loader=new THREE.TextureLoader();
-const LEAF_TEX={};
-const LEAF_MAT={};
-const BARK_MAT={};
-
-[1,2,3].forEach(sid=>{
-    const cfg=SPECIES_CONFIG[sid];
-    LEAF_TEX[sid]=tex_loader.load(cfg.leafUrl);
-    LEAF_MAT[sid]=new THREE.MeshLambertMaterial({
-        map:LEAF_TEX[sid],
-        transparent:false,
-        alphaTest:cfg.alphaTest,
-        side:THREE.DoubleSide,
-        depthWrite:false
+// PlantFATE Math
+const traits = {
+    Hm:        35.0,
+    a:        120.0,
+    c:        400.0,
+    eta_c:      0.7,
+    rho_s:    600.0,
+    lambda_l:   0.12,
+    zeta:       0.08,
+    f_cr:       0.47,
+    fr_max:     0.25,
+    Dmat:       0.3,
+    a2:        10.0,
+    m_seed:   0.002,
+    c_acc:      0.3,
+    nu_H:    0.0002
+  };
+  
+  function tree_height(Hm, D, a) {
+    return Hm * (1 - Math.exp((-a * D) / Hm));
+  }
+  
+  // A wrapper 
+  const PlantFATEMath = {
+    height(D) { return tree_height(traits.Hm, D, traits.a); }
+  };
+  
+  // species configuration
+  const SPECIES_CONFIG = {
+    1: { leafUrl: 'images/tree1.png', leafSizeFactor: 2.0, branchAngle: 0.70, lengthTaper: 0.68, alphaTest: 0.08 },
+    2: { leafUrl: 'images/tree2.png', leafSizeFactor: 1.0, branchAngle: 0.55, lengthTaper: 0.70, alphaTest: 0.15 },
+    3: { leafUrl: 'images/tree3.png', leafSizeFactor: 1.5, branchAngle: 0.60, lengthTaper: 0.75, alphaTest: 0.08 }
+  };
+  // species specific bark configuration
+  const BARK_COLOR = {
+    1: new THREE.Color(0x4a2c0a),
+    2: new THREE.Color(0x3b2508),
+    3: new THREE.Color(0x5c3a12)
+  };
+  
+  // texture and material cache 
+  const _texLoader = new THREE.TextureLoader();
+  const LEAF_TEX   = {};
+  const LEAF_MAT   = {};
+  const BARK_MAT   = {};
+  
+  [1, 2, 3].forEach(sid => {
+    const cfg = SPECIES_CONFIG[sid];
+    LEAF_TEX[sid] = _texLoader.load(cfg.leafUrl);
+    LEAF_MAT[sid] = new THREE.MeshLambertMaterial({
+      map:        LEAF_TEX[sid],
+      transparent: true,               // has to be true for alphaTest to work as it controls visibility 
+      alphaTest:  cfg.alphaTest,
+      side:       THREE.DoubleSide,
+      depthWrite: false
     });
-    BARK_MAT[sid]=new THREE.MeshLambertMaterial({color: BARK_COLOR[sid]});
-});
-
-// Geometry only tree builder 
-
-const _dummy=new THREE.Object3D();
-const _up=new THREE.Vector3(0,1,0);
-const _tangent=new THREE.Vector3();
-const _axisX=new THREE.Vector3();
-
-// Bark Geometry which is a cylinder
-function collectBranchGeometries(barkGeos,leafGeos,length,thickness,depth,speciesID,maxDepth,worldMatrix){
-    const cgf=SPECIES_CONFIG[speciesID]||SPECIES_CONFIG[1];
-    const cylGeo=new THREE.CylinderGeometry(thickness*0.7,thickness,length,6);
-    cylGeo.translate(0,length/2,0);
+    BARK_MAT[sid] = new THREE.MeshLambertMaterial({ color: BARK_COLOR[sid] });
+  });
+  
+  // geometry only tree builder 
+  const _up = new THREE.Vector3(0, 1, 0);
+  
+  function collectBranchGeometries(barkGeos, leafGeos, length, thickness, depth, speciesId, maxDepth, worldMatrix) {
+    const cfg = SPECIES_CONFIG[speciesId] || SPECIES_CONFIG[1];
+  
+    // bark cylinder
+    const cylGeo = new THREE.CylinderGeometry(thickness * 0.7, thickness, length, 6);
+    cylGeo.translate(0, length / 2, 0);
     cylGeo.applyMatrix4(worldMatrix);
     barkGeos.push(cylGeo);
-    const tipMatrix=worldMatrix.clone();
-    tipMatrix.multiply(new THREE.Matrix4().makeTranslation(0,length,0));
-
-    // Base case- leaf cross planes 
-    if(depth>=maxDepth){
-        const planeSize=length*cfg.leafSizeFactor;
-        const pGeo=new THREE.PlaneGeometry(planeSize,planeSize);
-        performance.translate(0,planeSize/2,0);
-
-        // plane 1
-        const p1=pGeo.clone();
-        p1.applyMatrix4(tipMatrix);
-        leafGeos.push(p1);
-
-        // plane 2 at 90 degrees to p1
-        const p2=pGeo.clone();
-        const rot=new THREE.Matrix4.makeRotationY(Math.PI/2);
-        p2.applyMatrix4(rot);
-        p2.applyMatrix4(tipMatrix);
-        leafGeos.push(p2);
-
-        pGeo.dispose();
-        return;
+  
+    // tip world matrix
+    const tipMatrix = worldMatrix.clone();
+    tipMatrix.multiply(new THREE.Matrix4().makeTranslation(0, length, 0));
+  
+    // Base case: leaf cross-planes at tip
+    if (depth >= maxDepth) {
+      const planeSize = length * cfg.leafSizeFactor;
+      const pGeo = new THREE.PlaneGeometry(planeSize, planeSize);
+      pGeo.translate(0, planeSize / 2, 0);
+  
+      // plane 1
+      const p1 = pGeo.clone();
+      p1.applyMatrix4(tipMatrix);
+      leafGeos.push(p1);
+  
+      // plane 2 at 90 degrees to p1
+      const p2 = pGeo.clone();
+      const rot = new THREE.Matrix4().makeRotationY(Math.PI / 2);
+      p2.applyMatrix4(rot);
+      p2.applyMatrix4(tipMatrix);
+      leafGeos.push(p2);
+  
+      pGeo.dispose();
+      return;
     }
-
-    // recurse 
-    const nextLength=length*cfg.lengthTaper;
-    const nextThickness=thickness*0.64;
-    const angle=cfg.branchAngle;
-    const rotOffset=Math.random()*Math.pi*2;
-    for(let i=0;i<4;i++){
-        const twist=rotOffset+i*(Math.PI/2);
-        const childMatrix=tipMatric.clone();
-        childMatrix.multiply(
-            new THREE.Matrix4().makeRotationFromEuler(
-                new THREE.Euler(angle,twist,0,'YXZ')
-            )
-        );
-        collectBranchGeometries(barkGeos,leafGeos,nextLength,nextThickness,depth+1,speciesID,maxDepth,childMatrix);
+  
+    // recurse for 4-way split branches 
+    const nextLength    = length * cfg.lengthTaper;
+    const nextThickness = thickness * 0.64;
+    const angle         = cfg.branchAngle;
+    const rotOffset = Math.random() * Math.PI * 2;
+  
+    for (let i = 0; i < 4; i++) {
+      const twist = rotOffset + i * (Math.PI / 2);
+      const childMatrix = tipMatrix.clone();
+      childMatrix.multiply(
+        new THREE.Matrix4().makeRotationFromEuler(
+          new THREE.Euler(angle, twist, 0, 'YXZ')
+        )
+      );
+      collectBranchGeometries(barkGeos, leafGeos, nextLength, nextThickness, depth + 1, speciesId, maxDepth, childMatrix);
     }
+  }
+  
+  // building the trees by merging geometries 
+  function buildMergedTreeGeo(D, speciesId) {
+    const sid   = speciesId || 1;
+    const H     = PlantFATEMath.height(D);
+    if (H <= 0) return null;
+  
+    const maxDepth      = sid === 2 ? 5 : 4;
+    const trunkLength   = H * 0.38;
+    const baseThickness = D * 0.5;
+  
+    const barkGeos = [];
+    const leafGeos = [];
+  
+    collectBranchGeometries(
+      barkGeos, leafGeos,
+      trunkLength, baseThickness,
+      0, sid, maxDepth,
+      new THREE.Matrix4()
+    );
+  
+    const mergedBark = barkGeos.length ? THREE.BufferGeometryUtils.mergeBufferGeometries(barkGeos) : null;
+    const mergedLeaf = leafGeos.length ? THREE.BufferGeometryUtils.mergeBufferGeometries(leafGeos) : null;
+  
+    barkGeos.forEach(g => g.dispose());
+    leafGeos.forEach(g => g.dispose());
+  
+    return { bark: mergedBark, leaf: mergedLeaf };
+  }
+  
+  // constants 
+  const MAX_TREES = 10;
+  const LAND_AREA = 100 * 100; // land area 
+  
+  // the scene
+  class ForestScene {
+    constructor(container) {
+      this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      this.renderer.setPixelRatio(1);
+      this.renderer.setSize(container.clientWidth, container.clientHeight);
+      this.renderer.setClearColor(0x0c120d);
+      this.renderer.shadowMap.enabled = false;
+      container.appendChild(this.renderer.domElement);
+  
+      this.scene = new THREE.Scene();
+      this.scene.fog = new THREE.Fog(0x0c120d, 80, 220);
+  
+      this.camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 500);
+      this.camera.position.set(0, 8, 22);
+  
+      this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+      this.controls.target.set(0, 4, 0);
+      this.controls.enableDamping = true;
+      this.controls.dampingFactor = 0.07;
+      this.controls.update();
+  
+      this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const sun = new THREE.DirectionalLight(0xfff5e6, 0.9);
+      sun.position.set(40, 80, 20);
+      this.scene.add(sun);
+  
+      this._addGround();
+  
+      window.addEventListener('resize', () => {
+        const w = container.clientWidth, h = container.clientHeight;
+        this.camera.aspect = w / h;
+        this.camera.updateProjectionMatrix();
+        this.renderer.setSize(w, h);
+      });
+    }
+  
+    _addGround() {
+      const groundTex = _texLoader.load('images/soil.png'); // loads the soil image 
+      
+      // to tile the image across the directions 
+      groundTex.wrapS = THREE.RepeatWrapping;
+      groundTex.wrapT = THREE.RepeatWrapping;
+      groundTex.repeat.set(10, 10);  // each tile contains 10 units 
+      groundTex.anisotropy= this.renderer.capabilities.getMaxAnisotropy();
 
-}
-
+      // building the ground by merging the geometry and the material 
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(100, 100),
+        new THREE.MeshLambertMaterial({ map: groundTex, color: 0x4a3728 })
+      );
+      ground.rotation.x = -Math.PI / 2;
+      this.scene.add(ground);
+  
+      const grid = new THREE.GridHelper(100, 20, 0x1a2b1f, 0x111c15);
+      grid.position.y = 0.02;
+      this.scene.add(grid);
+    }
+  
+    render() {
+      this.controls.update();
+      this.renderer.render(this.scene, this.camera);
+    }
+  }
+  
+  // forest manager 
+  class ForestManager {
+    constructor(scene3) {
+      this.s3          = scene3;
+      this.forestGroup = new THREE.Group();
+      this.s3.scene.add(this.forestGroup);
+  
+      this.positions  = {};
+      this.allYears   = [];
+      this.yearIndex  = 0;
+      this.playing    = false;
+      this.speed      = 1;
+      this._playAccum = 0;
+      this._lastTime  = null;
+    }
+  
+    init(data) {
+      this.data     = data;
+      this.allYears = Object.keys(data).map(Number).sort((a, b) => a - b);
+      this.showYear(0);
+    }
+  
+    get totalYears() { return this.allYears.length; }
+  
+    showYear(index) {
+      this.yearIndex = Math.max(0, Math.min(index, this.allYears.length - 1));
+      const yr       = this.allYears[this.yearIndex];
+      const cohorts  = this.data[yr] || [];
+      this._buildForest(cohorts);
+      UI.update(yr, this.yearIndex, this.totalYears, cohorts);
+    }
+  
+    next() { if (this.yearIndex < this.totalYears - 1) this.showYear(this.yearIndex + 1); }
+    prev() { if (this.yearIndex > 0)                   this.showYear(this.yearIndex - 1); }
+  
+    togglePlay() { this.playing = !this.playing; this._lastTime = null; }
+  
+    tick(now) {
+      if (!this.playing) return;
+      if (this._lastTime === null) { this._lastTime = now; return; }
+      const dt = (now - this._lastTime) / 1000;
+      this._lastTime   = now;
+      this._playAccum += dt * this.speed;
+      if (this._playAccum >= 1.2) {
+        this._playAccum = 0;
+        if (this.yearIndex < this.totalYears - 1) this.next();
+        else { this.playing = false; UI.setPlayBtn(false); }
+      }
+    }
+  
+    _buildForest(cohorts) {
+      this.forestGroup.children.forEach(mesh => {
+        if (mesh.geometry) mesh.geometry.dispose();
+      });
+      this.forestGroup.clear();
+  
+      const counts = cohorts.map(c => Math.max(1, Math.round(c.d * LAND_AREA)));
+      const total  = counts.reduce((a, b) => a + b, 0);
+      const scale  = Math.min(1, MAX_TREES / Math.max(total, 1));
+  
+      let treeCount = 0;
+      const HUD = { 1: null, 2: null, 3: null };
+  
+      for (let i = 0; i < cohorts.length; i++) {
+        const co  = cohorts[i];
+        const n   = Math.max(1, Math.round(counts[i] * scale));
+        const sid = co.s || 1;
+        const key = `${co.s}_${co.c}`;
+  
+        if (!HUD[sid]) HUD[sid] = co;
+  
+        if (!this.positions[key]) this.positions[key] = [];
+        while (this.positions[key].length < n) {
+          this.positions[key].push([
+            (Math.random() - 0.5) * 94,
+            (Math.random() - 0.5) * 94
+          ]);
+        }
+        const coords = this.positions[key].slice(0, n);
+  
+        const proto = buildMergedTreeGeo(co.bd, sid);
+        if (!proto) continue;
+  
+        const cohortBark = [];
+        const cohortLeaf = [];
+  
+        for (const [x, z] of coords) {
+          const rotY = Math.random() * Math.PI * 2;
+          const mat4 = new THREE.Matrix4().compose(
+            new THREE.Vector3(x, 0, z),
+            new THREE.Quaternion().setFromAxisAngle(_up, rotY),
+            new THREE.Vector3(1, 1, 1)
+          );
+  
+          if (proto.bark) { const b = proto.bark.clone(); b.applyMatrix4(mat4); cohortBark.push(b); }
+          if (proto.leaf) { const l = proto.leaf.clone(); l.applyMatrix4(mat4); cohortLeaf.push(l); }
+          treeCount++;
+        }
+  
+        if (cohortBark.length) {
+          const geo = THREE.BufferGeometryUtils.mergeBufferGeometries(cohortBark);
+          this.forestGroup.add(new THREE.Mesh(geo, BARK_MAT[sid]));
+          cohortBark.forEach(g => g.dispose());
+        }
+        if (cohortLeaf.length) {
+          const geo = THREE.BufferGeometryUtils.mergeBufferGeometries(cohortLeaf);
+          this.forestGroup.add(new THREE.Mesh(geo, LEAF_MAT[sid]));
+          cohortLeaf.forEach(g => g.dispose());
+        }
+  
+        if (proto.bark) proto.bark.dispose();
+        if (proto.leaf) proto.leaf.dispose();
+      }
+  
+      const statTrees = document.getElementById('stat-trees');
+      if (statTrees) statTrees.textContent = treeCount;
+  
+      [1, 2, 3].forEach(sid => {
+        const el = document.getElementById(`s${sid}-basal-dia`);
+        if (el) el.textContent = HUD[sid] ? HUD[sid].bd.toFixed(3) + ' m' : '--';
+      });
+    }
+  }
+  
+  // user interface 
+  const UI = {
+    yearEl:   document.getElementById('year-display'),
+    cohortEl: document.getElementById('year-cohort-line'),
+    fillEl:   document.getElementById('progress-fill'),
+    thumbEl:  document.getElementById('progress-thumb'),
+    statC:    document.getElementById('stat-cohorts'),
+    playBtn:  document.getElementById('btn-play'),
+  
+    update(year, index, total, cohorts) {
+      if (this.yearEl)   this.yearEl.textContent   = year;
+      if (this.cohortEl) this.cohortEl.textContent = `${cohorts.length} cohorts active`;
+      const pct = (index / Math.max(total - 1, 1)) * 100;
+      if (this.fillEl)  this.fillEl.style.width = pct + '%';
+      if (this.thumbEl) this.thumbEl.style.left  = pct + '%';
+      if (this.statC)   this.statC.textContent   = cohorts.length;
+    },
+  
+    setPlayBtn(playing) {
+      if (!this.playBtn) return;
+      this.playBtn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
+      this.playBtn.classList.toggle('active', playing);
+    }
+  };
+  
+  // bootstrapping 
+  const container = document.getElementById('simulation-viewport');
+  const scene3    = new ForestScene(container);
+  const forest    = new ForestManager(scene3);
+  
+  function waitForData() {
+    if (typeof PLANT_FATE_DATA === 'undefined') { setTimeout(waitForData, 30); return; }
+    forest.init(PLANT_FATE_DATA);
+    const loadEl = document.getElementById('loading');
+    if (loadEl) loadEl.classList.add('hidden');
+    bindUI();
+    requestAnimationFrame(loop);
+  }
+  
+  function loop(now) {
+    requestAnimationFrame(loop);
+    forest.tick(now);
+    scene3.render();
+  }
+  
+  function bindUI() {
+    const q = id => document.getElementById(id);
+  
+    if (q('btn-prev'))  q('btn-prev').onclick  = () => forest.prev();
+    if (q('btn-next'))  q('btn-next').onclick  = () => forest.next();
+    if (q('btn-reset')) q('btn-reset').onclick = () => {
+      forest.showYear(0);
+      scene3.camera.position.set(0, 8, 22);
+      scene3.controls.target.set(0, 4, 0);
+      scene3.controls.update();
+    };
+    if (q('btn-play')) q('btn-play').onclick = () => { forest.togglePlay(); UI.setPlayBtn(forest.playing); };
+  
+    ['spd-slow', 'spd-norm', 'spd-fast'].forEach((id, i) => {
+      if (!q(id)) return;
+      q(id).onclick = () => {
+        forest.speed = [0.5, 1, 2.5][i];
+        ['spd-slow', 'spd-norm', 'spd-fast'].forEach(b => { if (q(b)) q(b).classList.remove('active'); });
+        q(id).classList.add('active');
+      };
+    });
+  
+    const pw = q('progress-wrap');
+    if (pw) pw.addEventListener('click', e => {
+      const pct = (e.clientX - pw.getBoundingClientRect().left) / pw.offsetWidth;
+      forest.showYear(Math.round(pct * (forest.totalYears - 1)));
+    });
+  
+    window.addEventListener('keydown', e => {
+      if (e.key === 'n' || e.key === 'N') forest.next();
+      if (e.key === 'p' || e.key === 'P') forest.prev();
+      if (e.key === 'r' || e.key === 'R') {
+        scene3.camera.position.set(0, 8, 22);
+        scene3.controls.target.set(0, 4, 0);
+        scene3.controls.update();
+      }
+      if (e.key === ' ') { e.preventDefault(); forest.togglePlay(); UI.setPlayBtn(forest.playing); }
+    });
+  }
+  
+  waitForData();
