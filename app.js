@@ -1,19 +1,11 @@
 // PlantFATE Math
 const traits = {
-    Hm:        35.0,
-    a:        120.0,
-    c:        400.0,
-    eta_c:      0.7,
-    rho_s:    600.0,
-    lambda_l:   0.12,
-    zeta:       0.08,
-    f_cr:       0.47,
-    fr_max:     0.25,
-    Dmat:       0.3,
-    a2:        10.0,
-    m_seed:   0.002,
-    c_acc:      0.3,
-    nu_H:    0.0002
+    Hm: 35, // Maximum height
+    a: 75, // stem slenderness ratio
+    c: 6000, // area ratio
+    m: 1.5, // crown shape parameter
+    n:2, // crown shape parameter
+    rho_s:    0.6, // wood density
   };
   
   function tree_height(Hm, D, a) {
