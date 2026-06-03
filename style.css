@@ -1,0 +1,197 @@
+/* Base Layout Reset */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --ui-bg: rgba(30, 30, 30, 0.85);
+    --ui-border: rgba(255, 255, 255, 0.1);
+    --ui-text: #ffffff;
+    --ui-muted: #aaaaaa;
+    --ui-accent: #00ffcc;
+    --font-sans: sans-serif;
+    --font-mono: monospace;
+}
+
+body {
+    background: #3f463d;
+    overflow: hidden;
+    font-family: var(--font-sans);
+    color: var(--ui-text);
+}
+
+/* Master container separates screens from the control bar at bottom */
+#main-container {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    height: 100vh;
+    width: 100vw;
+    padding: 10px;
+    gap: 10px;
+}
+
+
+canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Ensure the parent viewport allows absolute children to bind to its boundaries */
+.viewport-box {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border: 2px solid #333;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #1e1e1e;
+}
+
+/* Profiles Wrapper - Pinned to the right edge and stacked vertically */
+#viewport-profiles {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;         /* Space between the three boxes */
+    width: 240px;      /* Explicit width for the profile cards */
+    z-index: 10;       /* Sits above the 3D canvas rendering background */
+    pointer-events: none; /* Allows mouse drag/scroll to hit the Three.js canvas underneath */
+}
+
+/* Individual HUD Panels */
+.hud-panel {
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    pointer-events: auto; /* Restores clicking/hovering features exclusively on the card text */
+}
+
+
+.hud-species-name {
+    margin: 0 0 5px 0;
+    font-size: 1.1rem;
+}
+
+.hud-divider {
+    border: 0;
+    border-top: 1px solid #444;
+    margin-bottom: 10px;
+}
+
+.hud-metric {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+}
+
+.hud-metric .label {
+    color: #aaa;
+}
+
+.hud-metric .val {
+    font-weight: bold;
+    color: var(--ui-accent);
+}
+
+#bottom-bar {
+    display: flex; 
+    flex-direction: column; 
+    gap: 12px;
+    pointer-events: all;
+}
+
+#timeline {
+    background: var(--ui-bg);
+    border: 1px solid var(--ui-border);
+    border-radius: 6px;
+    padding: 14px 20px;
+    backdrop-filter: blur(12px);
+}
+
+#year-row {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 10px;
+}
+#year-display {
+    font-family: var(--font-mono);
+    font-size: 28px; font-weight: 500;
+    color: var(--ui-accent);
+    line-height: 1;
+    min-width: 60px;
+}
+#year-sub {
+    font-family: var(--font-mono);
+    font-size: 10px; color: var(--ui-muted);
+    line-height: 1.5;
+}
+
+#progress-wrap {
+    position: relative; height: 3px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px; cursor: pointer;
+    margin-bottom: 10px;
+}
+#progress-fill {
+    height: 100%; border-radius: 2px;
+    background: var(--ui-accent);
+    transition: width 0.15s;
+    pointer-events: none;
+}
+#progress-thumb {
+    position: absolute; top: 50%;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--ui-accent);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    transition: left 0.15s;
+}
+
+#controls-row { display: flex; align-items: center; gap: 10px; }
+
+.btn {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--ui-border);
+    border-radius: 5px;
+    color: var(--ui-text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    letter-spacing: 0.05em;
+}
+.btn:hover { 
+    background: rgb(60, 173, 0); 
+    border-color: rgba(255,255,255,0.2); 
+}
+.btn.active { 
+    background: var(--ui-accent); 
+    border-color: var(--ui-accent); 
+    color: #ffffff; 
+}
+.btn-icon { 
+    width: 35px; 
+    height: 30px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    padding: 0; 
+}
+
+#speed-label { 
+    font-family: var(--font-mono); 
+    font-size: 10px; color: 
+    var(--ui-muted); 
+    margin-left: auto; 
+}
+
+#keys {
+    font-family: var(--font-mono); font-size: 15px; color: var(--ui-muted);
+    display: flex; gap: 16px; flex-wrap: wrap;
+}
+.key { display: inline-flex; align-items: center; gap: 4px; }
+.keycap { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 3px; padding: 1px 5px; font-size: 9px; }

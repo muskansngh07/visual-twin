@@ -1,5 +1,3 @@
-
-
 // PlantFATE Math
 const traits = {
     Hm:        35.0,
@@ -29,10 +27,29 @@ const traits = {
   
   // species configuration
   const SPECIES_CONFIG = {
-    1: { leafUrl: 'images/tree1.png', leafSizeFactor: 2.0, branchAngle: 0.70, lengthTaper: 0.68, alphaTest: 0.08 },
-    2: { leafUrl: 'images/tree2.png', leafSizeFactor: 1.0, branchAngle: 0.55, lengthTaper: 0.70, alphaTest: 0.15 },
-    3: { leafUrl: 'images/tree3.png', leafSizeFactor: 1.5, branchAngle: 0.60, lengthTaper: 0.75, alphaTest: 0.08 }
+    1: { 
+        leafUrl: 'images/tree1.png', 
+        leafSizeFactor: 2.0, 
+        branchAngle: 0.70, 
+        lengthTaper: 0.68, 
+        alphaTest: 0.08 
+    },
+    2: { 
+        leafUrl: 'images/tree2.png', 
+        leafSizeFactor: 1.0, 
+        branchAngle: 0.55, 
+        lengthTaper: 0.70, 
+        alphaTest: 0.15 
+    },
+    3: { 
+        leafUrl: 'images/tree3.png', 
+        leafSizeFactor: 1.5, 
+        branchAngle: 0.60, 
+        lengthTaper: 0.75, 
+        alphaTest: 0.08 
+    }
   };
+
   // species specific bark configuration
   const BARK_COLOR = {
     1: new THREE.Color(0x4a2c0a),
@@ -227,6 +244,7 @@ const traits = {
       this.speed      = 1;
       this._playAccum = 0;
       this._lastTime  = null;
+      this._t=0;
     }
   
     init(data) {
@@ -237,12 +255,14 @@ const traits = {
   
     get totalYears() { return this.allYears.length; }
   
-    showYear(index) {
-      this.yearIndex = Math.max(0, Math.min(index, this.allYears.length - 1));
-      const yr       = this.allYears[this.yearIndex];
-      const cohorts  = this.data[yr] || [];
-      this._buildForest(cohorts);
-      UI.update(yr, this.yearIndex, this.totalYears, cohorts);
+    showYear(index) 
+    {
+        this._t=0;
+        this.yearIndex = Math.max(0, Math.min(index, this.allYears.length - 1));
+        const yr       = this.allYears[this.yearIndex];
+        const cohorts  = this.data[yr] || [];
+        this._buildForest(cohorts);
+        UI.update(yr, this.yearIndex, this.totalYears, cohorts);
     }
   
     next() { if (this.yearIndex < this.totalYears - 1) this.showYear(this.yearIndex + 1); }
@@ -251,16 +271,27 @@ const traits = {
     togglePlay() { this.playing = !this.playing; this._lastTime = null; }
   
     tick(now) {
-      if (!this.playing) return;
-      if (this._lastTime === null) { this._lastTime = now; return; }
-      const dt = (now - this._lastTime) / 1000;
-      this._lastTime   = now;
-      this._playAccum += dt * this.speed;
-      if (this._playAccum >= 1.2) {
-        this._playAccum = 0;
-        if (this.yearIndex < this.totalYears - 1) this.next();
-        else { this.playing = false; UI.setPlayBtn(false); }
-      }
+        if (!this.playing) return;
+        if (this._lastTime === null) { this._lastTime = now; return; }
+        const dt = (now - this._lastTime) / 1000;
+        this._lastTime = now;
+      
+        this._t += dt * this.speed * (1 / 1.2);  // 0→1 over 1.2s
+      
+        if (this._t >= 1) {
+          this._t = 0;
+          if (this.yearIndex < this.totalYears - 1) {
+            this.yearIndex++;
+            this._buildForest(this.data[this.allYears[this.yearIndex]]);
+            UI.update(this.allYears[this.yearIndex], this.yearIndex, this.totalYears, this.data[this.allYears[this.yearIndex]]);
+          } else {
+            this.playing = false;
+            UI.setPlayBtn(false);
+          }
+        }
+      
+        // smoothly scale forest between current and next year size
+        this._applyGrowthScale(this._t);
     }
   
     _buildForest(cohorts) {
@@ -335,6 +366,24 @@ const traits = {
         if (el) el.textContent = HUD[sid] ? HUD[sid].bd.toFixed(3) + ' m' : '--';
       });
     }
+
+    _applyGrowthScale(t) {
+        if (this.yearIndex >= this.totalYears - 1) return;
+        const currCohorts = this.data[this.allYears[this.yearIndex]];
+        const nextCohorts = this.data[this.allYears[this.yearIndex + 1]];
+      
+        this.forestGroup.children.forEach((mesh, idx) => {
+          const cohortIndex = Math.floor(idx / 2); // bark + leaf = 2 meshes per cohort
+          const curr = currCohorts[cohortIndex];
+          const next = nextCohorts
+            ? nextCohorts.find(c => c.s === curr.s && c.c === curr.c)
+            : null;
+          if (!curr || !next || curr.bd <= 0) return;
+      
+          const scaleVal = 1 + (next.bd / curr.bd - 1) * t;
+          mesh.scale.setScalar(scaleVal);
+        });
+      }
   }
   
   // user interface 
@@ -368,12 +417,40 @@ const traits = {
   const forest    = new ForestManager(scene3);
   
   function waitForData() {
-    if (typeof PLANT_FATE_DATA === 'undefined') { setTimeout(waitForData, 30); return; }
-    forest.init(PLANT_FATE_DATA);
-    const loadEl = document.getElementById('loading');
-    if (loadEl) loadEl.classList.add('hidden');
-    bindUI();
-    requestAnimationFrame(loop);
+    Papa.parse('cohort_props.csv', {
+      download: true,
+      header: true,
+      dynamicTyping: true,
+      skipEmptyLines: true,
+      complete: function(results) {
+        const raw = results.data;
+        const byYear = {};
+  
+        raw.forEach(row => {
+          const yr  = Math.floor(row.YEAR);   // YEAR is a float like 2000.04166667
+          if (!byYear[yr]) byYear[yr] = [];
+          byYear[yr].push({
+            s:  row.speciesID,                // maps to sid
+            c:  row.cohortNum,                // cohort identifier for stable positions
+            d:  row.density,                  // trees per m² — used for tree count
+            bd: row.basal_diameter,           // drives PlantFATE height + trunk thickness
+            lai: row.lai,
+            mort: row.mort,
+            fec:  row.fec,
+            gpp:  row.gpp
+          });
+        });
+  
+        forest.init(byYear);
+        const loadEl = document.getElementById('loading');
+        if (loadEl) loadEl.classList.add('hidden');
+        bindUI();
+        requestAnimationFrame(loop);
+      },
+      error: function(err) {
+        console.error('CSV parse error:', err);
+      }
+    });
   }
   
   function loop(now) {
@@ -398,7 +475,7 @@ const traits = {
     ['spd-slow', 'spd-norm', 'spd-fast'].forEach((id, i) => {
       if (!q(id)) return;
       q(id).onclick = () => {
-        forest.speed = [0.5, 1, 2.5][i];
+        forest.speed = [0.5, 1, 10][i];
         ['spd-slow', 'spd-norm', 'spd-fast'].forEach(b => { if (q(b)) q(b).classList.remove('active'); });
         q(id).classList.add('active');
       };
@@ -422,4 +499,4 @@ const traits = {
     });
   }
   
-  waitForData();
+waitForData();
