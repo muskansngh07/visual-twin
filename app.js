@@ -138,3 +138,6 @@ const BARK_MAT={};
     });
     BARK_MAT[sid]=new THREE.MeshLambertMaterial({color: BARK_COLOR[sid]});
 });
+
+// Geometry only tree builder 
+
