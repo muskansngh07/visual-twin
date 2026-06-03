@@ -8,6 +8,7 @@
         <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     </head>
     <body>
         <div id="main-container"> 
@@ -19,7 +20,6 @@
                     <div class="hud-panel" id="hud-species-1">
                         <h3 class="hud-species-name">Species 1 Profile</h3>
                         <hr class="hud-divider">
-                        <div class="hud-metric"><span class="label">Basal Diameter:</span><span id="s1-basal-dia" class="val">--</span></div>
                         <div class="hud-metric"><span class="label">Canopy Shape (m):</span><span id="s1-shape-m" class="val">2.5</span></div>
                         <div class="hud-metric"><span class="label">Canopy Shape (n):</span><span id="s1-shape-n" class="val">1.8</span></div>
                         <div class="hud-metric"><span class="label">Branch Angle:</span><span id="s1-branch-angle" class="val">0.70</span></div>
@@ -28,7 +28,6 @@
                     <div class="hud-panel" id="hud-species-2">
                         <h3 class="hud-species-name">Species 2 Profile</h3>
                         <hr class="hud-divider">
-                        <div class="hud-metric"><span class="label">Basal Diameter:</span><span id="s2-basal-dia" class="val">--</span></div>
                         <div class="hud-metric"><span class="label">Canopy Shape (m):</span><span id="s2-shape-m" class="val">1.8</span></div>
                         <div class="hud-metric"><span class="label">Canopy Shape (n):</span><span id="s2-shape-n" class="val">1.8</span></div>
                         <div class="hud-metric"><span class="label">Branch Angle:</span><span id="s2-branch-angle" class="val">0.55</span></div>
@@ -37,7 +36,6 @@
                     <div class="hud-panel" id="hud-species-3">
                         <h3 class="hud-species-name">Species 3 Profile</h3>
                         <hr class="hud-divider">
-                        <div class="hud-metric"><span class="label">Basal Diameter:</span><span id="s3-basal-dia" class="val">--</span></div>
                         <div class="hud-metric"><span class="label">Canopy Shape (m):</span><span id="s3-shape-m" class="val">1.8</span></div>
                         <div class="hud-metric"><span class="label">Canopy Shape (n):</span><span id="s3-shape-n" class="val">2.3</span></div>
                         <div class="hud-metric"><span class="label">Branch Angle:</span><span id="s3-branch-angle" class="val">0.60</span></div>
@@ -77,12 +75,12 @@
                         <span id="speed-label">speed:</span>
                         <button class="btn" id="spd-slow">0.5×</button>
                         <button class="btn active" id="spd-norm">1×</button>
-                        <button class="btn" id="spd-fast">2×</button>
+                        <button class="btn" id="spd-fast">10×</button>
                     </div>
                 </div>
             </div>
 
-        </div> <script src="app.js"></script> 
-        <script src="plantfate_data.js"></script>
+        </div> 
+        <script src="app.js"></script> 
     </body>
 </html>
