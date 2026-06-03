@@ -1,3 +1,5 @@
+import { SIGNED_R11_EAC_Format } from "three";
+
 // PlantFATE Maths
 const traits={
     Hm:35.0,   // maximum achievable height
@@ -84,6 +86,7 @@ function calculate_cohort_instantaneous_rates(D,lai,gpp,t=traits){
 }
 
 // SPECIFIC CONFIGURATION
+
 // Species-specific settings
 const SPECIES_CONFIG={
     1:{
@@ -116,3 +119,22 @@ const BARK_COLOR={
     3:new THREE.Color(0x5c3a12)
 };
 
+// TEXTURE AND MATERIAL CACHE
+
+const tex_loader=new THREE.TextureLoader();
+const LEAF_TEX={};
+const LEAF_MAT={};
+const BARK_MAT={};
+
+[1,2,3].forEach(sid=>{
+    const cfg=SPECIES_CONFIG[sid];
+    LEAF_TEX[sid]=tex_loader.load(cfg.leafUrl);
+    LEAF_MAT[sid]=new THREE.MeshLambertMaterial({
+        map:LEAF_TEX[sid],
+        transparent:false,
+        alphaTest:cfg.alphaTest,
+        side:THREE.DoubleSide,
+        depthWrite:false
+    });
+    BARK_MAT[sid]=new THREE.MeshLambertMaterial({color: BARK_COLOR[sid]});
+});
