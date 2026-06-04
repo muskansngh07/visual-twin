@@ -157,10 +157,13 @@ const traits = {
   const MAX_TREES = 10;
   const LAND_AREA = 100 * 100; // land area 
   
-  // the scene
+  // the forest
   class ForestScene {
     constructor(container) {
-      this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      this.renderer = new THREE.WebGLRenderer({ 
+        antialias: true, 
+        powerPreference: 'high-performance' 
+      });
       this.renderer.setPixelRatio(1);
       this.renderer.setSize(container.clientWidth, container.clientHeight);
       this.renderer.setClearColor(0x0c120d);
@@ -168,7 +171,9 @@ const traits = {
       container.appendChild(this.renderer.domElement);
   
       this.scene = new THREE.Scene();
-      this.scene.fog = new THREE.Fog(0x0c120d, 80, 220);
+      const bgm=_texLoader.load('images/background.png');
+      this.scene.background=bgm;
+      this.scene.fog = new THREE.Fog(0x0c120d, 180, 500); // adds linear fog 
   
       this.camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 500);
       this.camera.position.set(0, 8, 22);
@@ -245,7 +250,9 @@ const traits = {
       this.showYear(0);
     }
   
-    get totalYears() { return this.allYears.length; }
+    get totalYears() { 
+      return this.allYears.length; 
+    }
   
     showYear(index) 
     {
@@ -257,10 +264,19 @@ const traits = {
         UI.update(yr, this.yearIndex, this.totalYears, cohorts);
     }
   
-    next() { if (this.yearIndex < this.totalYears - 1) this.showYear(this.yearIndex + 1); }
-    prev() { if (this.yearIndex > 0)                   this.showYear(this.yearIndex - 1); }
+    next() { 
+      if (this.yearIndex < this.totalYears - 1) 
+        this.showYear(this.yearIndex + 1); 
+      }
+    prev() { 
+      if (this.yearIndex > 0)                   
+        this.showYear(this.yearIndex - 1); 
+      }
   
-    togglePlay() { this.playing = !this.playing; this._lastTime = null; }
+    togglePlay() { 
+      this.playing = !this.playing; 
+      this._lastTime = null; 
+    }
   
     tick(now) {
         if (!this.playing) return;
@@ -268,7 +284,7 @@ const traits = {
         const dt = (now - this._lastTime) / 1000;
         this._lastTime = now;
       
-        this._t += dt * this.speed * (1 / 1.2);  // 0→1 over 1.2s
+        this._t += dt * this.speed * (1 / 1.2);  
       
         if (this._t >= 1) {
           this._t = 0;
