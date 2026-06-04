@@ -412,7 +412,7 @@ class ForestManager {
 
   _renderCurrentTimelineFrame() {
     const currentYearFloat = this.currentYearFloat;
-    
+    if(currentYearFloat==2000) return; // to fix tree scaling issues
     let idx = this.allYears.findIndex(y => y > currentYearFloat);
     if (idx === -1) idx = this.allYears.length - 1;
     
