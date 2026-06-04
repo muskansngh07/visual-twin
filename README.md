@@ -14,4 +14,7 @@ root
 |--- index.html
 |--- style.css
 |--- app.js
+|--- cohort_props.csv
+|--- info.txt
+|--- test_tree_csv.html // tree structures 
 ```
