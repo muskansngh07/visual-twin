@@ -1,0 +1,19 @@
+cohortNum - Group to which the tree belongs.
+
+basal_diameter - Refers to trunk's cross sectional diameter on the ground just before the root flayers.
+
+dbh - Refers to diameter at breast height. It is the trunk's diameter before it starts splitting into branches.
+
+mort - Refers to mortality.
+
+fec - Refers to fecundity. Signifies the reproductive nature of the tree. Mortality tends to shrink the populatiob whereas fecundity tends to expand it.
+
+total_biomass - Refers to total mass of organic living mass in the tree, usually measured as dry weight in kg.
+
+agb - Refers to above ground biomass. This is basically leaves, trunks, and branches.
+
+lai - Refers to leaf area index. Tells how much sq. meters of leaf surface hangs above a unit sq. meter of ground.
+
+rgr - Refers to relative growth rate. Represents how much a tree grows relative to its current size.
+
+gpp - Refers to gross primary production. It is the total amount of chemical energy that the leaves/ canopy capture from sunlight through photosynthesis.
