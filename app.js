@@ -1,22 +1,85 @@
 // PlantFATE Math
-const traits = {
-    Hm: 35, // Maximum height
-    a: 75, // stem slenderness ratio
-    c: 6000, // area ratio
-    m: 1.5, // crown shape parameter
-    n:2, // crown shape parameter
-    rho_s:    0.6, // wood density
-  };
-  
-  function tree_height(Hm, D, a) {
-    return Hm * (1 - Math.exp((-a * D) / Hm));
+class PlantFATEMath{
+  // PlantFATE parameters
+  constructor(basalDiameter){
+    this.Hm=35; // maximum height
+    this.a=75; // stem slenderness ratio
+    this.c=600; // area ratio
+    this.m=1.5; // crown shape parameter
+    this.n=2; // crown shape parameter
+    this.rho_s=0.6; // wood density
+    this.D=Number(basalDiameter); // basal diameter, from csv
+
+    try{
+      const denominator=(this.m*this.n)-1;
+      const numerator=this.n-1;
+      if(denominator==0 || this.n==0){
+        throw new RangeError("ZeroDivisionError");
+      }
+      const base=numerator/denominator;
+      if(base<0 && (1/this.n)%1!==0){
+        throw new RangeError("ValueError");
+      }
+      this.zmratio=Math.pow(base,(1/this.n));
+      if(Number.isNaN(this.zmratio)){
+        throw new Error("Invalid");
+      }
+    } 
+    catch(error){
+      this.zmratio=0.0;
+      console.warn("Couldn't calculate zmratio, defaulting to 0.0");
+    }
+  }
+  // Equation : H= Hm*(1-exp(a*D/Hm))
+  calculateHeight(){
+    return this.Hm*(1-Math.exp((-this.a*this.D)/this.Hm));
+  }
+
+  // Equation : A_c=(pi*c*H*D)/(4*a) 
+  calculateCrownArea(){
+    const H=this.calculateHeight();
+    return ((Math.PI*this.c)/(4*this.a))*H*this.D;
+  }
+
+  // Equation: f_s= H/(a*D)
+  calculateSapwoodFraction(){
+    const H=this.calculateHeight();
+    if((this.a*this.D)==0)
+      return 0;
+    return H/(this.a*this.D);
   }
   
-  // A wrapper 
-  const PlantFATEMath = {
-    height(D) { return tree_height(traits.Hm, D, traits.a); }
-  };
-  
+  // Crown radius according to PlantFATE documentation
+  calculateCrownRadiusAtHeight(z,H){
+    const zRatio=z/H;
+    let base=1-Math.pow(zRatio,this.n);
+    if(base<0)
+      base=0;
+    const q_z=this.m*this.n*Math.pow(zRatio,(this.n-1))*Math.pow(base,(this.m-1));
+    const A_c=this.calculateCrownArea();
+    const z_m=H*this.zmratio;
+    const q_m=this.calculateQatHeight(z_m,H);
+    if(q_m==0) return 0;
+    const r0=Math.sqrt(A_c/Math.PI)/q_m;
+    return r0*q_z;
+  }
+
+  // according to PlantFATE documentation
+  calculateQatHeight(z,H){
+    const zRatio=z/H;
+    const base=1-Math.pow(zRatio,this.n);
+    return this.m*this.n*Math.pow(zRatio,(this.n-1))*Math.pow(base,(this.m-1));
+  }
+
+  // Stem radius according to PlantFATE documentation
+  stemRadiusAtHeight(z,H){
+    const baseRadius=this.D/2.0;
+    if(H<=0) return baseRadius;
+    const heightRatio=z/H;
+    const taperFactor=1.0-Math.pow(heightRatio,1.5);
+    return baseRadius*taperFactor;
+  }
+}
   // species configuration
   const SPECIES_CONFIG = {
     1: { 
@@ -154,8 +217,8 @@ const traits = {
   }
   
   // constants 
-  const MAX_TREES = 10;
-  const LAND_AREA = 100 * 100; // land area 
+  const MAX_TREES = 5;
+  const LAND_AREA = 150 * 150; // land area 
   
   // the forest
   class ForestScene {
@@ -172,7 +235,7 @@ const traits = {
   
       this.scene = new THREE.Scene();
       const bgm=_texLoader.load('images/background.png');
-      this.scene.background=bgm;
+      this.scene.background=bgm; // adds background image to the scene
       this.scene.fog = new THREE.Fog(0x0c120d, 180, 500); // adds linear fog 
   
       this.camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 500);
@@ -210,7 +273,7 @@ const traits = {
 
       // building the ground by merging the geometry and the material 
       const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(100, 100),
+        new THREE.PlaneGeometry(150, 150),
         new THREE.MeshLambertMaterial({ map: groundTex, color: 0x4a3728 })
       );
       ground.rotation.x = -Math.PI / 2;
@@ -236,42 +299,41 @@ const traits = {
   
       this.positions  = {};
       this.allYears   = [];
-      this.yearIndex  = 0;
       this.playing    = false;
       this.speed      = 1;
-      this._playAccum = 0;
+      
+      this.currentYearFloat = 0; 
       this._lastTime  = null;
-      this._t=0;
     }
   
     init(data) {
       this.data     = data;
       this.allYears = Object.keys(data).map(Number).sort((a, b) => a - b);
-      this.showYear(0);
+      if (this.allYears.length > 0) {
+        this.currentYearFloat = this.allYears[0];
+        this._renderCurrentTimelineFrame();
+      }
     }
   
     get totalYears() { 
       return this.allYears.length; 
     }
   
-    showYear(index) 
-    {
-        this._t=0;
-        this.yearIndex = Math.max(0, Math.min(index, this.allYears.length - 1));
-        const yr       = this.allYears[this.yearIndex];
-        const cohorts  = this.data[yr] || [];
-        this._buildForest(cohorts);
-        UI.update(yr, this.yearIndex, this.totalYears, cohorts);
+    showYear(index) {
+      const safeIdx = Math.max(0, Math.min(index, this.allYears.length - 1));
+      this.currentYearFloat = this.allYears[safeIdx];
+      this._renderCurrentTimelineFrame();
     }
   
     next() { 
-      if (this.yearIndex < this.totalYears - 1) 
-        this.showYear(this.yearIndex + 1); 
-      }
-    prev() { 
-      if (this.yearIndex > 0)                   
-        this.showYear(this.yearIndex - 1); 
-      }
+      let idx = this.allYears.findIndex(y => y > this.currentYearFloat);
+      if (idx !== -1) this.showYear(idx);
+    }
+    
+    prev() {
+      let idx = this.allYears.findIndex(y => y >= this.currentYearFloat);
+      if (idx > 0) this.showYear(idx - 1);
+    }
   
     togglePlay() { 
       this.playing = !this.playing; 
@@ -279,27 +341,62 @@ const traits = {
     }
   
     tick(now) {
-        if (!this.playing) return;
-        if (this._lastTime === null) { this._lastTime = now; return; }
-        const dt = (now - this._lastTime) / 1000;
-        this._lastTime = now;
+      if (!this.playing) return;
+      if (this._lastTime === null) { this._lastTime = now; return; }
+      const dt = (now - this._lastTime) / 1000;
+      this._lastTime = now;
+  
+      // Smoothly advance the continuous timeline variable
+      this.currentYearFloat += dt * this.speed * 0.5; // Tweak 0.5 to change pace
+  
+      const endYear = this.allYears[this.allYears.length - 1];
+      if (this.currentYearFloat >= endYear) {
+        this.currentYearFloat = endYear;
+        this.playing = false;
+        UI.setPlayBtn(false);
+      }
+  
+      this._renderCurrentTimelineFrame();
+    }
+  
+    // Generates smooth, mathematically blended cohorts between Year A and Year B
+    _renderCurrentTimelineFrame() {
+      const currentYearFloat = this.currentYearFloat;
       
-        this._t += dt * this.speed * (1 / 1.2);  
+      let idx = this.allYears.findIndex(y => y > currentYearFloat);
+      if (idx === -1) idx = this.allYears.length - 1;
       
-        if (this._t >= 1) {
-          this._t = 0;
-          if (this.yearIndex < this.totalYears - 1) {
-            this.yearIndex++;
-            this._buildForest(this.data[this.allYears[this.yearIndex]]);
-            UI.update(this.allYears[this.yearIndex], this.yearIndex, this.totalYears, this.data[this.allYears[this.yearIndex]]);
-          } else {
-            this.playing = false;
-            UI.setPlayBtn(false);
-          }
-        }
+      const baseIdx = Math.max(0, idx - 1);
+      const nextIdx = Math.min(this.allYears.length - 1, baseIdx + 1);
       
-        // smoothly scale forest between current and next year size
-        this._applyGrowthScale(this._t);
+      const yearA = this.allYears[baseIdx];
+      const yearB = this.allYears[nextIdx];
+      
+      let t = 0;
+      if (yearB !== yearA) {
+        t = (currentYearFloat - yearA) / (yearB - yearA);
+      }
+  
+      const cohortsA = this.data[yearA] || [];
+      const cohortsB = this.data[yearB] || [];
+  
+      // Create a brand new hybrid cohort array smoothly blended across time
+      const interpolatedCohorts = cohortsA.map(cA => {
+        const cB = cohortsB.find(c => c.s === cA.s && c.c === cA.c) || cA;
+        return {
+          s: cA.s,
+          c: cA.c,
+          bd: cA.bd + (cB.bd - cA.bd) * t,
+          d: cA.d + (cB.d - cA.d) * t
+        };
+      });
+  
+  
+      this._buildForest(interpolatedCohorts);
+  
+      // Keep the UI counters updating seamlessly
+      const currentDisplayYear = Math.floor(currentYearFloat);
+      UI.update(currentDisplayYear, baseIdx, this.allYears.length, interpolatedCohorts);
     }
   
     _buildForest(cohorts) {
@@ -332,6 +429,7 @@ const traits = {
         }
         const coords = this.positions[key].slice(0, n);
   
+        // Procedural generation uses the smoothly changing interpolated 'bd' parameter!
         const proto = buildMergedTreeGeo(co.bd, sid);
         if (!proto) continue;
   
@@ -339,7 +437,7 @@ const traits = {
         const cohortLeaf = [];
   
         for (const [x, z] of coords) {
-          const rotY = Math.random() * Math.PI * 2;
+          const rotY = (key.split('_')[1] * 13.37) % (Math.PI * 2); // Deterministic rotation angle
           const mat4 = new THREE.Matrix4().compose(
             new THREE.Vector3(x, 0, z),
             new THREE.Quaternion().setFromAxisAngle(_up, rotY),
@@ -374,24 +472,6 @@ const traits = {
         if (el) el.textContent = HUD[sid] ? HUD[sid].bd.toFixed(3) + ' m' : '--';
       });
     }
-
-    _applyGrowthScale(t) {
-        if (this.yearIndex >= this.totalYears - 1) return;
-        const currCohorts = this.data[this.allYears[this.yearIndex]];
-        const nextCohorts = this.data[this.allYears[this.yearIndex + 1]];
-      
-        this.forestGroup.children.forEach((mesh, idx) => {
-          const cohortIndex = Math.floor(idx / 2); // bark + leaf = 2 meshes per cohort
-          const curr = currCohorts[cohortIndex];
-          const next = nextCohorts
-            ? nextCohorts.find(c => c.s === curr.s && c.c === curr.c)
-            : null;
-          if (!curr || !next || curr.bd <= 0) return;
-      
-          const scaleVal = 1 + (next.bd / curr.bd - 1) * t;
-          mesh.scale.setScalar(scaleVal);
-        });
-      }
   }
   
   // user interface 
@@ -413,7 +493,8 @@ const traits = {
     },
   
     setPlayBtn(playing) {
-      if (!this.playBtn) return;
+      if (!this.playBtn) 
+        return;
       this.playBtn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
       this.playBtn.classList.toggle('active', playing);
     }
@@ -424,7 +505,8 @@ const traits = {
   const scene3    = new ForestScene(container);
   const forest    = new ForestManager(scene3);
   
-  function waitForData() {
+  function waitForData() 
+  {
     Papa.parse('cohort_props.csv', {
       download: true,
       header: true,
@@ -461,13 +543,15 @@ const traits = {
     });
   }
   
-  function loop(now) {
+  function loop(now) 
+  {
     requestAnimationFrame(loop);
     forest.tick(now);
     scene3.render();
   }
   
-  function bindUI() {
+  function bindUI() 
+  {
     const q = id => document.getElementById(id);
   
     if (q('btn-prev'))  q('btn-prev').onclick  = () => forest.prev();
