@@ -31,18 +31,18 @@ class PlantFATEMath {
     }
   }
 
-  // Equation : H= Hm*(1-exp(a*D/Hm))
+  // Equation : H = Hm * (1 - exp (a * D / Hm))
   calculateHeight() {
     return this.Hm * (1 - Math.exp((-this.a * this.D) / this.Hm));
   }
 
-  // Equation : A_c=(pi*c*H*D)/(4*a) 
+  // Equation : A_c = ( pi * c * H * D)/(4 * a) 
   calculateCrownArea() {
     const H = this.calculateHeight();
     return ((Math.PI * this.c) / (4 * this.a)) * H * this.D;
   }
 
-  // Equation: f_s= H/(a*D)
+  // Equation: f_s = H /(a*D)
   calculateSapwoodFraction() {
     const H = this.calculateHeight();
     if ((this.a * this.D) == 0)
@@ -271,7 +271,7 @@ class ForestScene {
     // to tile the image across the directions 
     groundTex.wrapS = THREE.RepeatWrapping;
     groundTex.wrapT = THREE.RepeatWrapping;
-    groundTex.repeat.set(10, 10);  // each tile contains 10 units 
+    groundTex.repeat.set(10, 10);  
     groundTex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
 
     // building the ground by merging the geometry and the material 
@@ -429,17 +429,13 @@ class ForestManager {
 
     const cohortsA = this.data[yearA] || [];
     const cohortsB = this.data[yearB] || [];
-
-    // Reset visible instance counters for this frame
     const instanceCounters = { 1: 0, 2: 0, 3: 0 };
     let totalTreeCount = 0;
     const HUD = { 1: null, 2: null, 3: null };
-
-    // Calculate baseline reference targets ONCE per frame (Optimization)
     const pfBase = new PlantFATEMath(0.1);
     const baseHeight = pfBase.calculateHeight();
 
-    // Process baseline matrix transformations
+    // process baseline matrix transformations
     cohortsA.forEach(cA => {
       const cB = cohortsB.find(c => c.s === cA.s && c.c === cA.c) || cA;
       const currentDiameter = cA.bd + (cB.bd - cA.bd) * t;
@@ -448,19 +444,16 @@ class ForestManager {
       const sid = cA.s || 1;
       const imPair = this.instancedMeshes[sid];
       if (!imPair) return;
-    
-      // Map active stats to display on HUD dashboard
       HUD[sid] = { bd: currentDiameter };
 
-      // Calculate real structural targets
+      // calculate real structural targets
       const pf = new PlantFATEMath(currentDiameter);
       const targetHeight = pf.calculateHeight();
       
-      // Deduce the non-linear relative scale multipliers
       const scaleXAndZ = currentDiameter / 0.1;
       const scaleY     = targetHeight / baseHeight;
     
-      // Look up randomized relative coordinate vectors for this stable cohort key
+      // look up randomized relative coordinate vectors for this stable cohort key
       const key = `${cA.s}_${cA.c}`;
       const coords = this.positions[key];
       if (!coords) return; 
@@ -485,7 +478,7 @@ class ForestManager {
       });
     });
 
-    // Synchronize changes to WebGL buffers without altering geometry tree limits
+    // synchronize changes to WebGL buffers without altering geometry tree limits
     [1, 2, 3].forEach(sid => {
       const imPair = this.instancedMeshes[sid];
       imPair.bark.count = instanceCounters[sid];
@@ -494,7 +487,7 @@ class ForestManager {
       imPair.leaf.instanceMatrix.needsUpdate = true;
     });
 
-    // Keep the UI counters updating seamlessly
+    // keep the UI counters updating seamlessly
     const currentDisplayYear = Math.floor(currentYearFloat);
     UI.update(currentDisplayYear, baseIdx, this.allYears.length, cohortsA);
 
@@ -551,13 +544,13 @@ function waitForData()
       const byYear = {};
 
       raw.forEach(row => {
-        const yr  = Math.floor(row.YEAR);   // YEAR is a float like 2000.04166667
+        const yr  = Math.floor(row.YEAR);   
         if (!byYear[yr]) byYear[yr] = [];
         byYear[yr].push({
-          s:  row.speciesID,                // maps to sid
-          c:  row.cohortNum,                // cohort identifier for stable positions
-          d:  row.density,                  // trees per m² — used for tree count
-          bd: row.basal_diameter,           // drives PlantFATE height + trunk thickness
+          s:  row.speciesID,                
+          c:  row.cohortNum,                
+          d:  row.density,                  
+          bd: row.basal_diameter,           
         });
       });
 
