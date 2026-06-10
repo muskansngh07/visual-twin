@@ -123,7 +123,7 @@ function buildCrownLathePts(pf, H, crownBaseZ, segments) {
 
 // Single trunk cylinder + lathe crown, both fully governed by PlantFATE math
 function buildMergedTreeGeo(D, speciesId) {
-  const sid = speciesId || 1;
+  const sid = speciesId;
   const pf  = new PlantFATEMath(D);
   const H   = pf.calculateHeight();
   if (H <= 0) return null;
