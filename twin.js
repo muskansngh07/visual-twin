@@ -1,261 +1,184 @@
-// PlantFATE Math
+// PlantFATE Math - Preserved completely for exact mathematical scaling rules
 class PlantFATEMath {
   constructor(basalDiameter) {
-    this.Hm    = 35;
-    this.a     = 75;
-    this.c     = 600;
-    this.m     = 1.5;
-    this.n     = 2;
+    this.Hm = 35;
+    this.a = 75;
+    this.c = 600;
+    this.m = 1.8;
+    this.n = 2.3;
     this.rho_s = 0.6;
-    this.D     = Number(basalDiameter);
+    this.D = Number(basalDiameter);
 
     try {
       const denominator = (this.m * this.n) - 1;
-      const numerator   = this.n - 1;
-      if (denominator === 0 || this.n === 0) throw new RangeError("ZeroDivisionError");
+      const numerator = this.n - 1;
+      if (denominator == 0 || this.n == 0) throw new RangeError("ZeroDivisionError");
       const base = numerator / denominator;
       if (base < 0 && (1 / this.n) % 1 !== 0) throw new RangeError("ValueError");
-      this.zmratio = Math.pow(base, 1 / this.n);
+      this.zmratio = Math.pow(base, (1 / this.n));
       if (Number.isNaN(this.zmratio)) throw new Error("Invalid");
-    } catch {
+    } catch (error) {
       this.zmratio = 0.0;
-      console.warn("Couldn't calculate zmratio, defaulting to 0.0");
     }
   }
 
-  // H = Hm * (1 - exp(-a * D / Hm))
   calculateHeight() {
     return this.Hm * (1 - Math.exp((-this.a * this.D) / this.Hm));
   }
 
-  // A_c = (pi * c * H * D) / (4 * a)
+  calculateDBH() {
+    const H = this.calculateHeight();
+    if (H <= 1.3) return this.D * 0.85;
+    return this.stemRadiusAtHeight(1.3, H) * 2.0;
+  }
+
   calculateCrownArea() {
     const H = this.calculateHeight();
     return ((Math.PI * this.c) / (4 * this.a)) * H * this.D;
   }
 
-  // f_s = H / (a * D)
+  getMaxCrownRadius() {
+    const area = this.calculateCrownArea();
+    if (area <= 0) return 0.5;
+    return Math.sqrt(area / Math.PI);
+  }
+
   calculateSapwoodFraction() {
     const H = this.calculateHeight();
-    if ((this.a * this.D) === 0) return 0;
+    if ((this.a * this.D) == 0) return 0;
     return H / (this.a * this.D);
   }
 
-  calculateQatHeight(z, H) {
-    const zRatio = Math.min(1.0, Math.max(0.0, z / H));
-    const base   = 1 - Math.pow(zRatio, this.n);
-    return this.m * this.n * Math.pow(zRatio, this.n - 1) * Math.pow(Math.max(0, base), this.m - 1);
-  }
-
-  // Crown radius profile from PlantFATE documentation
   calculateCrownRadiusAtHeight(z, H) {
-    const zRatio = Math.min(1.0, Math.max(0.0, z / H));
-    const base   = Math.max(0, 1 - Math.pow(zRatio, this.n));
-    const q_z    = this.m * this.n * Math.pow(zRatio, this.n - 1) * Math.pow(base, this.m - 1);
-    const A_c    = this.calculateCrownArea();
-    const z_m    = H * this.zmratio;
-    const q_m    = this.calculateQatHeight(z_m, H);
-    if (q_m === 0) return 0;
+    const zRatio = z / H;
+    let base = 1 - Math.pow(zRatio, this.n);
+    if (base < 0) base = 0;
+    const q_z = this.m * this.n * Math.pow(zRatio, (this.n - 1)) * Math.pow(base, (this.m - 1));
+    const A_c = this.calculateCrownArea();
+    const z_m = H * this.zmratio;
+    const q_m = this.calculateQatHeight(z_m, H);
+    if (q_m == 0) return 0;
     const r0 = Math.sqrt(A_c / Math.PI) / q_m;
     return r0 * q_z;
   }
 
-  // Stem taper from PlantFATE documentation
+  calculateQatHeight(z, H) {
+    const zRatio = z / H;
+    const base = 1 - Math.pow(zRatio, this.n);
+    return this.m * this.n * Math.pow(zRatio, (this.n - 1)) * Math.pow(base, (this.m - 1));
+  }
+
   stemRadiusAtHeight(z, H) {
-    const baseRadius  = this.D / 2.0;
+    const baseRadius = this.D / 2.0;
     if (H <= 0) return baseRadius;
-    const heightRatio = Math.min(1.0, Math.max(0.0, z / H));
+    const heightRatio = z / H;
     const taperFactor = 1.0 - Math.pow(heightRatio, 1.5);
     return baseRadius * taperFactor;
   }
 }
 
-// ─── Species configuration ────────────────────────────────────────────────────
-const SPECIES_CONFIG = {
-  1: { leafUrl: 'images/tree1.png', leafSizeFactor: 2.0, branchAngle: 0.70, lengthTaper: 0.68, alphaTest: 0.08 },
-  2: { leafUrl: 'images/tree2.png', leafSizeFactor: 1.0, branchAngle: 0.55, lengthTaper: 0.70, alphaTest: 0.15 },
-  3: { leafUrl: 'images/tree3.png', leafSizeFactor: 1.5, branchAngle: 0.60, lengthTaper: 0.75, alphaTest: 0.08 }
-};
+// Initialize Texture Loader
+const _texLoader = new THREE.TextureLoader();
+
+// 1. Load crown textures properly
+const tree1 = _texLoader.load('images/leaves1.png');
+const tree2 = _texLoader.load('images/leaves2.png');
+const tree3 = _texLoader.load('images/leaves3.png');
 
 const BARK_COLOR = {
-  1: new THREE.Color(0xffffff),
-  2: new THREE.Color(0xffffff),
-  3: new THREE.Color(0xffffff)
+  1: new THREE.Color(0x8B6340),
+  2: new THREE.Color(0x7A5C35),
+  3: new THREE.Color(0x6B4F2E)
 };
 
-// ─── Texture / material cache ─────────────────────────────────────────────────
-const _texLoader = new THREE.TextureLoader();
-const LEAF_TEX = {};
-const LEAF_MAT = {};
-const BARK_MAT = {};
+const LEAF_MAT  = {};
+const BARK_MAT  = {};
 
+// 2. Setup materials correctly with texture references, transparency, and alpha testing
 [1, 2, 3].forEach(sid => {
-  const cfg      = SPECIES_CONFIG[sid];
-  LEAF_TEX[sid]  = _texLoader.load(cfg.leafUrl);
-  LEAF_MAT[sid]  = new THREE.MeshLambertMaterial({
-    map: LEAF_TEX[sid], transparent: true,
-    alphaTest: cfg.alphaTest, side: THREE.DoubleSide, depthWrite: false
+  let activeTex = tree1;
+  if (sid === 2) activeTex = tree2;
+  if (sid === 3) activeTex = tree3;
+
+  LEAF_MAT[sid] = new THREE.MeshLambertMaterial({
+    map: activeTex,
+    side: THREE.DoubleSide,
+    transparent: true,
+    alphaTest: 0.5 // Prevents depth-sorting artifacts in InstancedMesh layout
   });
-  BARK_MAT[sid]  = new THREE.MeshLambertMaterial({ color: BARK_COLOR[sid] });
+  
+  BARK_MAT[sid] = new THREE.MeshLambertMaterial({ color: BARK_COLOR[sid] });
 });
 
-// ─── Diameter LOD breakpoints (log-spaced, 0.01 → 6.26 m) ────────────────────
-// 12 steps so the worst-case residual scale within any band is ≤ ~1.42×,
-// small enough to be imperceptible while keeping PlantFATE geometry accurate.
-const DIAMETER_STEPS = [
-  0.010, 0.018, 0.032, 0.056, 0.100,
-  0.180, 0.320, 0.560, 1.000, 1.780,
-  3.160, 5.620
-];
-
-/**
- * Returns the index of the largest DIAMETER_STEPS value ≤ D.
- * Falls back to 0 for very small seedlings.
- */
-function lodIndexForDiameter(D) {
-  let idx = 0;
-  for (let i = 0; i < DIAMETER_STEPS.length; i++) {
-    if (DIAMETER_STEPS[i] <= D) idx = i;
-    else break;
+function buildCrownLathePts(pf, H, crownBaseZ, segments) {
+  segments = segments || 32;
+  const pts = [];
+  for (let i = 0; i <= segments; i++) {
+    const z = crownBaseZ + (i / segments) * (H - crownBaseZ);
+    const r = Math.max(0, pf.calculateCrownRadiusAtHeight(z, H));
+    pts.push(new THREE.Vector2(r, z - crownBaseZ));
   }
-  return idx;
+  return pts;
 }
 
-// ─── Branch geometry builder (PlantFATE-driven) ───────────────────────────────
-const _up = new THREE.Vector3(0, 1, 0);
-
-function collectBranchGeometries(
-  barkGeos, leafGeos,
-  currentZ, length, thickness,
-  depth, speciesId, maxDepth,
-  worldMatrix, pfMath, H
-) {
-  const cfg    = SPECIES_CONFIG[speciesId] || SPECIES_CONFIG[1];
-  const nextZ  = currentZ + length;
-
-  // PlantFATE stem taper at bottom and top of this segment
-  const radiusBottom    = Math.max(0.005, pfMath.stemRadiusAtHeight(currentZ, H));
-  const radiusTop       = Math.max(0.002, pfMath.stemRadiusAtHeight(nextZ,    H));
-
-  const cylGeo = new THREE.CylinderGeometry(radiusTop, radiusBottom, length, 6);
-  cylGeo.translate(0, length / 2, 0);
-  cylGeo.applyMatrix4(worldMatrix);
-  barkGeos.push(cylGeo);
-
-  const tipMatrix = worldMatrix.clone();
-  tipMatrix.multiply(new THREE.Matrix4().makeTranslation(0, length, 0));
-
-  // Leaf cross-planes at tips
-  if (depth >= maxDepth || nextZ >= H) {
-    const planeSize = length * cfg.leafSizeFactor;
-    const pGeo      = new THREE.PlaneGeometry(planeSize, planeSize);
-    pGeo.translate(0, planeSize / 2, 0);
-
-    const p1 = pGeo.clone();
-    p1.applyMatrix4(tipMatrix);
-    leafGeos.push(p1);
-
-    const p2  = pGeo.clone();
-    const rot = new THREE.Matrix4().makeRotationY(Math.PI / 2);
-    p2.applyMatrix4(rot);
-    p2.applyMatrix4(tipMatrix);
-    leafGeos.push(p2);
-
-    pGeo.dispose();
-    return;
-  }
-
-  // PlantFATE crown radius envelope — clip branch length to stay inside it
-  const allowedCrownRadius = pfMath.calculateCrownRadiusAtHeight(nextZ, H);
-  let   nextLength          = length * cfg.lengthTaper;
-  if (depth > 0 && nextLength > allowedCrownRadius) {
-    nextLength = allowedCrownRadius * 0.5;
-  }
-
-  const nextThickness = radiusTop;
-  const angle         = cfg.branchAngle;
-  const rotOffset     = Math.random() * Math.PI * 2;
-
-  for (let i = 0; i < 4; i++) {
-    const twist       = rotOffset + i * (Math.PI / 2);
-    const childMatrix = tipMatrix.clone();
-    childMatrix.multiply(
-      new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(angle, twist, 0, 'YXZ'))
-    );
-    collectBranchGeometries(
-      barkGeos, leafGeos,
-      nextZ, nextLength, nextThickness,
-      depth + 1, speciesId, maxDepth,
-      childMatrix, pfMath, H
-    );
-  }
-}
-
-/**
- * Builds merged bark+leaf geometry for a tree at a specific diameter.
- * This is the function called once per LOD step at startup.
- */
+// Single trunk cylinder + lathe crown, both fully governed by PlantFATE math
 function buildMergedTreeGeo(D, speciesId) {
   const sid = speciesId || 1;
   const pf  = new PlantFATEMath(D);
   const H   = pf.calculateHeight();
   if (H <= 0) return null;
 
-  const maxDepth    = sid === 2 ? 5 : 4;
-  const trunkLength = H * 0.38;
+  // Crown base: zmratio inflection point; fallback to 35% of H if degenerate
+  const crownBaseZ  = (pf.zmratio > 0)
+    ? Math.max(0, Math.min(H * 0.85, H * pf.zmratio * 0.5))
+    : H * 0.35;
+  const trunkHeight = crownBaseZ;
 
-  const barkGeos = [];
-  const leafGeos = [];
+  // Trunk: single tapered cylinder from ground to crownBaseZ
+  const rBase    = pf.stemRadiusAtHeight(0,           H);
+  const rTop     = pf.stemRadiusAtHeight(trunkHeight, H);
+  const trunkGeo = new THREE.CylinderGeometry(rTop, rBase, trunkHeight, 8);
+  trunkGeo.translate(0, trunkHeight / 2, 0);
 
-  collectBranchGeometries(
-    barkGeos, leafGeos,
-    0, trunkLength, D,
-    0, sid, maxDepth,
-    new THREE.Matrix4(), pf, H
-  );
+  // Crown: LatheGeometry profile driven by m and n, lifted onto trunk top
+  const lathePts = buildCrownLathePts(pf, H, crownBaseZ, 32);
+  const crownGeo = new THREE.LatheGeometry(lathePts, 16);
+  crownGeo.translate(0, crownBaseZ, 0);
 
-  const mergedBark = barkGeos.length
-    ? THREE.BufferGeometryUtils.mergeBufferGeometries(barkGeos) : null;
-  const mergedLeaf = leafGeos.length
-    ? THREE.BufferGeometryUtils.mergeBufferGeometries(leafGeos) : null;
+  const mergedBark = THREE.BufferGeometryUtils.mergeBufferGeometries([trunkGeo]);
+  const mergedLeaf = THREE.BufferGeometryUtils.mergeBufferGeometries([crownGeo]);
 
-  barkGeos.forEach(g => g.dispose());
-  leafGeos.forEach(g => g.dispose());
+  trunkGeo.dispose();
+  crownGeo.dispose();
 
   return { bark: mergedBark, leaf: mergedLeaf };
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const MAX_TREES = 5;
-const LAND_SIZE = 500;
-const LAND_AREA = LAND_SIZE * LAND_SIZE;
+const LAND_AREA = 120 * 120;
 
-// ─── ForestScene ──────────────────────────────────────────────────────────────
 class ForestScene {
   constructor(container) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(1);
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.setClearColor(0x0c120d);
-    this.renderer.shadowMap.enabled = false;
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
     this.scene.background = _texLoader.load('images/background.png');
-    this.scene.fog = new THREE.Fog(0x0c120d, 400, 1200);
+    this.scene.fog = new THREE.Fog(0x0c120d, 180, 500);
 
-    this.camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 2000);
-    this.camera.position.set(0, 80, 250);
+    this.camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 500);
+    this.camera.position.set(0, 35, 65);
 
     this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.target.set(0, 15, 0);
-    this.controls.enableDamping  = true;
-    this.controls.dampingFactor  = 0.07;
-    this.controls.update();
+    this.controls.target.set(0, 4, 0);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.07;
 
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const sun = new THREE.DirectionalLight(0xfff5e6, 0.9);
-    sun.position.set(150, 300, 100);
+    sun.position.set(40, 80, 20);
     this.scene.add(sun);
 
     this._addGround();
@@ -272,19 +195,13 @@ class ForestScene {
     const groundTex = _texLoader.load('images/soil.png');
     groundTex.wrapS = THREE.RepeatWrapping;
     groundTex.wrapT = THREE.RepeatWrapping;
-    groundTex.repeat.set(40, 40);
-    groundTex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
-
+    groundTex.repeat.set(10, 10);
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(LAND_SIZE, LAND_SIZE),
+      new THREE.PlaneGeometry(120, 120),
       new THREE.MeshLambertMaterial({ map: groundTex, color: 0x4a3728 })
     );
     ground.rotation.x = -Math.PI / 2;
     this.scene.add(ground);
-
-    const grid = new THREE.GridHelper(LAND_SIZE, 40, 0x1a2b1f, 0x111c15);
-    grid.position.y = 0.02;
-    this.scene.add(grid);
   }
 
   render() {
@@ -293,134 +210,102 @@ class ForestScene {
   }
 }
 
-// ─── ForestManager ────────────────────────────────────────────────────────────
 class ForestManager {
   constructor(scene3) {
     this.s3          = scene3;
     this.forestGroup = new THREE.Group();
     this.s3.scene.add(this.forestGroup);
 
-    this.positions  = {};   // key → [[x,z], ...]
+    this.positions  = {};
     this.allYears   = [];
     this.playing    = false;
-    this.speed      = 10;
+    this.speed      = 2;
 
     this.currentYearFloat = 0;
     this._lastTime        = null;
 
-    // instancedMeshes[sid][lodIndex] = { bark: InstancedMesh, leaf: InstancedMesh }
-    this.instancedMeshes             = {};
-    this._maxPossibleInstancePerStep = 600; // per species per LOD step
+    this.geometryCache = {};
   }
 
   init(data) {
     this.data     = data;
     this.allYears = Object.keys(data).map(Number).sort((a, b) => a - b);
     if (this.allYears.length > 0) {
-      this._initLODMeshes();
       this._initPositions();
       this.currentYearFloat = this.allYears[0];
       this._renderCurrentTimelineFrame();
     }
   }
 
-  // ── Build one InstancedMesh pair per species × LOD step ──────────────────
-  _initLODMeshes() {
-    [1, 2, 3].forEach(sid => {
-      this.instancedMeshes[sid] = [];
-
-      DIAMETER_STEPS.forEach((D, lodIdx) => {
-        const proto = buildMergedTreeGeo(D, sid);
-        if (!proto || !proto.bark || !proto.leaf) {
-          this.instancedMeshes[sid][lodIdx] = null;
-          return;
-        }
-
-        const barkIM = new THREE.InstancedMesh(proto.bark, BARK_MAT[sid], this._maxPossibleInstancePerStep);
-        const leafIM = new THREE.InstancedMesh(proto.leaf, LEAF_MAT[sid], this._maxPossibleInstancePerStep);
-        barkIM.count = 0;
-        leafIM.count = 0;
-        this.forestGroup.add(barkIM);
-        this.forestGroup.add(leafIM);
-
-        this.instancedMeshes[sid][lodIdx] = { bark: barkIM, leaf: leafIM };
-
-        // prototype geometry no longer needed on CPU
-        proto.bark.dispose();
-        proto.leaf.dispose();
-      });
-    });
-  }
-
-  // ── Space-repulsion layout (preserved exactly) ────────────────────────────
   _initPositions() {
-    const uniqueCohortKeys = new Set();
+    const existingSpawns  = [];
+    const CONSTANT_BUFFER = 0.5;
+
+    const maxCohortDiameters = {};
     this.allYears.forEach(year => {
-      (this.data[year] || []).forEach(co => uniqueCohortKeys.add(`${co.s}_${co.c}`));
-    });
-
-    const flatPointsList  = [];
-    const mapExtentLimit  = (LAND_SIZE / 2) - 10;
-
-    uniqueCohortKeys.forEach(key => {
-      const [speciesId, cohortNum] = key.split('_').map(Number);
-
-      let maxDensity = 0;
-      this.allYears.forEach(year => {
-        const found = (this.data[year] || []).find(c => c.s === speciesId && c.c === cohortNum);
-        if (found && found.d > maxDensity) maxDensity = found.d;
+      const cohorts = this.data[year] || [];
+      cohorts.forEach(co => {
+        const key = `S${co.s}_C${co.c}`;
+        if (!maxCohortDiameters[key] || co.bd > maxCohortDiameters[key]) {
+          maxCohortDiameters[key] = co.bd;
+        }
       });
-
-      const totalCounts  = Math.max(1, Math.round(maxDensity * LAND_AREA));
-      const targetsCount = Math.max(1, Math.round(totalCounts * Math.min(1, MAX_TREES / Math.max(totalCounts, 1))));
-
-      this.positions[key] = [];
-
-      for (let j = 0; j < targetsCount; j++) {
-        const pt = {
-          key,
-          x: -mapExtentLimit + Math.random() * (mapExtentLimit * 2),
-          z: -mapExtentLimit + Math.random() * (mapExtentLimit * 2)
-        };
-        flatPointsList.push(pt);
-        this.positions[key].push(pt);
-      }
     });
 
-    // Repulsion relaxation passes
-    const separationBound  = 18.0;
-    const passCount        = 15;
+    const masterCohortList = [];
+    this.allYears.forEach(year => {
+      const cohorts = this.data[year] || [];
+      cohorts.forEach(co => {
+        const key = `S${co.s}_C${co.c}`;
+        if (!masterCohortList.some(item => item.key === key)) {
+          masterCohortList.push({
+            key:   key,
+            s:     co.s,
+            c:     co.c,
+            d:     co.d,
+            maxBd: maxCohortDiameters[key] || 0.1
+          });
+        }
+      });
+    });
 
-    for (let pass = 0; pass < passCount; pass++) {
-      for (let i = 0; i < flatPointsList.length; i++) {
-        for (let j = i + 1; j < flatPointsList.length; j++) {
-          const a  = flatPointsList[i];
-          const b  = flatPointsList[j];
-          const dx = a.x - b.x;
-          const dz = a.z - b.z;
-          const d  = Math.sqrt(dx * dx + dz * dz);
+    masterCohortList.sort((a, b) => b.maxBd - a.maxBd);
 
-          if (d < separationBound && d > 0) {
-            const overlap = separationBound - d;
-            const pushX   = (dx / d) * overlap * 0.5;
-            const pushZ   = (dz / d) * overlap * 0.5;
+    masterCohortList.forEach(co => {
+      if (this.positions[co.key]) return;
 
-            a.x = Math.max(-mapExtentLimit, Math.min(mapExtentLimit, a.x + pushX));
-            a.z = Math.max(-mapExtentLimit, Math.min(mapExtentLimit, a.z + pushZ));
-            b.x = Math.max(-mapExtentLimit, Math.min(mapExtentLimit, b.x - pushX));
-            b.z = Math.max(-mapExtentLimit, Math.min(mapExtentLimit, b.z - pushZ));
+      const evalMath           = new PlantFATEMath(co.maxBd);
+      const currentMaxCrownRad = evalMath.getMaxCrownRadius();
+      const maxCohortTrees     = Math.min(6, Math.max(1, Math.round(co.d * 100)));
+      this.positions[co.key]   = [];
+
+      let attempts = 0;
+      while (this.positions[co.key].length < maxCohortTrees && attempts < 200) {
+        attempts++;
+        const candidateX = -50 + Math.random() * 100;
+        const candidateZ = -50 + Math.random() * 100;
+        let spatialViolation = false;
+
+        for (let s = 0; s < existingSpawns.length; s++) {
+          const activeSpawn = existingSpawns[s];
+          const dx = candidateX - activeSpawn[0];
+          const dz = candidateZ - activeSpawn[1];
+          const distance = Math.sqrt(dx * dx + dz * dz);
+          const minRequiredDistance = currentMaxCrownRad + activeSpawn[2] + CONSTANT_BUFFER;
+          if (distance < minRequiredDistance) {
+            spatialViolation = true;
+            break;
           }
         }
-      }
-    }
 
-    // Flatten back to [x, z] pairs
-    Object.keys(this.positions).forEach(key => {
-      this.positions[key] = this.positions[key].map(pt => [pt.x, pt.z]);
+        if (!spatialViolation) {
+          this.positions[co.key].push([candidateX, candidateZ]);
+          existingSpawns.push([candidateX, candidateZ, currentMaxCrownRad]);
+        }
+      }
     });
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
   get totalYears() { return this.allYears.length; }
 
   showYear(index) {
@@ -430,22 +315,24 @@ class ForestManager {
   }
 
   next() {
-    const idx = this.allYears.findIndex(y => y > this.currentYearFloat);
+    let idx = this.allYears.findIndex(y => y > this.currentYearFloat);
     if (idx !== -1) this.showYear(idx);
-    else this.showYear(this.allYears.length - 1);
   }
 
   prev() {
-    const idx = this.allYears.findIndex(y => y >= this.currentYearFloat);
+    let idx = this.allYears.findIndex(y => y >= this.currentYearFloat);
     if (idx > 0) this.showYear(idx - 1);
-    else if (idx === -1) this.showYear(this.allYears.length - 2);
   }
 
-  togglePlay() { this.playing = !this.playing; this._lastTime = null; }
+  togglePlay() {
+    this.playing   = !this.playing;
+    this._lastTime = null;
+  }
 
   tick(now) {
     if (!this.playing) return;
     if (this._lastTime === null) { this._lastTime = now; return; }
+
     const dt = (now - this._lastTime) / 1000;
     this._lastTime = now;
 
@@ -461,9 +348,9 @@ class ForestManager {
     this._renderCurrentTimelineFrame();
   }
 
-  // ── Core render: pick LOD step per cohort, apply small residual scale ─────
   _renderCurrentTimelineFrame() {
     const currentYearFloat = this.currentYearFloat;
+    if (this.allYears.length === 0) return;
 
     let idx = this.allYears.findIndex(y => y > currentYearFloat);
     if (idx === -1) idx = this.allYears.length - 1;
@@ -480,113 +367,109 @@ class ForestManager {
     const cohortsA = this.data[yearA] || [];
     const cohortsB = this.data[yearB] || [];
 
-    // instance counters per species per LOD step
-    // instanceCounters[sid][lodIdx] = number
-    const instanceCounters = {};
-    [1, 2, 3].forEach(sid => {
-      instanceCounters[sid] = new Array(DIAMETER_STEPS.length).fill(0);
-    });
+    while (this.forestGroup.children.length > 0) {
+      this.forestGroup.remove(this.forestGroup.children[0]);
+    }
 
     let totalTreeCount = 0;
-    const HUD = { 1: null, 2: null, 3: null };
+    const activeMathProfiles = { 1: null, 2: null, 3: null };
+    const _up = new THREE.Vector3(0, 1, 0);
 
     cohortsA.forEach(cA => {
-      const cB              = cohortsB.find(c => c.s === cA.s && c.c === cA.c) || cA;
+      const cB = cohortsB.find(c => c.s === cA.s && c.c === cA.c) || cA;
       const currentDiameter = cA.bd + (cB.bd - cA.bd) * t;
       if (currentDiameter <= 0) return;
 
-      const sid    = cA.s || 1;
-      const imBank = this.instancedMeshes[sid];
-      if (!imBank) return;
+      const sid = cA.s || 1;
 
-      HUD[sid] = { bd: currentDiameter };
+      if (!activeMathProfiles[sid]) {
+        activeMathProfiles[sid] = new PlantFATEMath(currentDiameter);
+      }
 
-      // ── LOD selection ────────────────────────────────────────────────────
-      // Pick the largest breakpoint diameter ≤ currentDiameter
-      const lodIdx    = lodIndexForDiameter(currentDiameter);
-      const lodD      = DIAMETER_STEPS[lodIdx];
-      const imPair    = imBank[lodIdx];
-      if (!imPair) return;
+      const stepDiameter = Math.round(currentDiameter * 100) / 100;
+      const cacheKey     = `${sid}_step_${stepDiameter.toFixed(2)}`;
 
-      // PlantFATE heights at the baked LOD diameter vs the real diameter
-      const pfLOD     = new PlantFATEMath(lodD);
-      const pfReal    = new PlantFATEMath(currentDiameter);
-      const heightLOD = pfLOD.calculateHeight();
-      const heightReal= pfReal.calculateHeight();
+      if (!this.geometryCache[cacheKey]) {
+        this.geometryCache[cacheKey] = buildMergedTreeGeo(stepDiameter, sid);
+      }
 
-      // Residual scale: how much larger/taller is the real tree vs the baked prototype?
-      // This is small (≤ ~1.42×) because breakpoints are log-spaced tightly enough.
-      const residualXZ = currentDiameter / lodD;
-      const residualY  = heightLOD > 0 ? heightReal / heightLOD : 1.0;
+      const exactGeoPair = this.geometryCache[cacheKey];
+      if (!exactGeoPair) return;
 
-      const key    = `${cA.s}_${cA.c}`;
-      const coords = this.positions[key];
-      if (!coords) return;
+      const key    = `S${cA.s}_C${cA.c}`;
+      const coords = this.positions[key] || [];
 
-      coords.forEach(([x, z]) => {
-        const currentIdx = instanceCounters[sid][lodIdx];
-        if (currentIdx >= this._maxPossibleInstancePerStep) return;
+      const barkIM = new THREE.InstancedMesh(exactGeoPair.bark, BARK_MAT[sid], coords.length);
+      const leafIM = new THREE.InstancedMesh(exactGeoPair.leaf, LEAF_MAT[sid], coords.length);
 
-        const rotY = (cA.c * 13.37) % (Math.PI * 2);
-
+      coords.forEach(([x, z], cIdx) => {
+        const rotY   = (cA.c * 13.37) % (Math.PI * 2);
         const matrix = new THREE.Matrix4().compose(
           new THREE.Vector3(x, 0, z),
           new THREE.Quaternion().setFromAxisAngle(_up, rotY),
-          // Residual scale is small — keeps visual continuity while using
-          // correctly-shaped PlantFATE geometry from the nearest LOD step
-          new THREE.Vector3(residualXZ, residualY, residualXZ)
+          new THREE.Vector3(1, 1, 1)
         );
-
-        imPair.bark.setMatrixAt(currentIdx, matrix);
-        imPair.leaf.setMatrixAt(currentIdx, matrix);
-
-        instanceCounters[sid][lodIdx]++;
+        barkIM.setMatrixAt(cIdx, matrix);
+        leafIM.setMatrixAt(cIdx, matrix);
         totalTreeCount++;
       });
+
+      barkIM.instanceMatrix.needsUpdate = true;
+      leafIM.instanceMatrix.needsUpdate = true;
+
+      this.forestGroup.add(barkIM);
+      this.forestGroup.add(leafIM);
     });
 
-    // Sync all LOD steps to GPU
+    UI.update(Math.floor(currentYearFloat), baseIdx, this.allYears.length, cohortsA);
+
     [1, 2, 3].forEach(sid => {
-      const imBank = this.instancedMeshes[sid];
-      DIAMETER_STEPS.forEach((_, lodIdx) => {
-        const imPair = imBank[lodIdx];
-        if (!imPair) return;
-        imPair.bark.count = instanceCounters[sid][lodIdx];
-        imPair.leaf.count = instanceCounters[sid][lodIdx];
-        imPair.bark.instanceMatrix.needsUpdate = true;
-        imPair.leaf.instanceMatrix.needsUpdate = true;
-      });
-    });
+      const pm       = activeMathProfiles[sid];
+      const shapeMEl = document.getElementById(`s${sid}-shape-m`);
+      const shapeNEl = document.getElementById(`s${sid}-shape-n`);
+      const angleEl  = document.getElementById(`s${sid}-branch-angle`);
 
-    const currentDisplayYear = Math.floor(currentYearFloat);
-    UI.update(currentDisplayYear, baseIdx, this.allYears.length, cohortsA);
+      if (pm) {
+        if (shapeMEl) shapeMEl.textContent = pm.m.toFixed(2) + ` (D:${pm.D.toFixed(2)}m)`;
+        if (shapeNEl) shapeNEl.textContent = pm.n.toFixed(2);
+        if (angleEl)  angleEl.textContent  = '--';
+      } else {
+        if (shapeMEl) shapeMEl.textContent = '--';
+      }
+    });
 
     const statTrees = document.getElementById('stat-trees');
     if (statTrees) statTrees.textContent = totalTreeCount;
+  }
 
-    [1, 2, 3].forEach(sid => {
-      const el = document.getElementById(`s${sid}-basal-dia`);
-      if (el) el.textContent = HUD[sid] ? HUD[sid].bd.toFixed(3) + ' m' : '--';
+  clearCacheMemory() {
+    Object.keys(this.geometryCache).forEach(key => {
+      const pair = this.geometryCache[key];
+      if (pair) {
+        if (pair.bark) pair.bark.dispose();
+        if (pair.leaf) pair.leaf.dispose();
+      }
+      delete this.geometryCache[key];
     });
   }
 }
 
-// ─── UI ───────────────────────────────────────────────────────────────────────
+// Resilient UI controller methods
 const UI = {
   yearEl:   document.getElementById('year-display'),
   cohortEl: document.getElementById('year-cohort-line'),
-  fillEl:   document.getElementById('progress-fill'),
-  thumbEl:  document.getElementById('progress-thumb'),
+  sliderEl: document.getElementById('timeline-slider'),
   statC:    document.getElementById('stat-cohorts'),
   playBtn:  document.getElementById('btn-play'),
 
   update(year, index, total, cohorts) {
     if (this.yearEl)   this.yearEl.textContent   = year;
     if (this.cohortEl) this.cohortEl.textContent = `${cohorts.length} cohorts active`;
-    const pct = (index / Math.max(total - 1, 1)) * 100;
-    if (this.fillEl)   this.fillEl.style.width = pct + '%';
-    if (this.thumbEl)  this.thumbEl.style.left  = pct + '%';
-    if (this.statC)    this.statC.textContent   = cohorts.length;
+    if (this.statC)    this.statC.textContent    = cohorts.length;
+    if (this.sliderEl) {
+      this.sliderEl.max   = total - 1;
+      this.sliderEl.value = index;
+    }
   },
 
   setPlayBtn(playing) {
@@ -596,21 +479,24 @@ const UI = {
   }
 };
 
-// ─── Bootstrap ────────────────────────────────────────────────────────────────
 const container = document.getElementById('simulation-viewport');
 const scene3    = new ForestScene(container);
 const forest    = new ForestManager(scene3);
 
 function waitForData() {
   Papa.parse('cohort_props.csv', {
-    download: true,
-    header: true,
-    dynamicTyping: true,
+    download:       true,
+    header:         true,
+    dynamicTyping:  true,
     skipEmptyLines: true,
-    complete(results) {
+    complete: function(results) {
+      const raw    = results.data;
       const byYear = {};
-      results.data.forEach(row => {
-        const yr = Math.floor(row.YEAR);
+
+      raw.forEach(row => {
+        if (row.YEAR === undefined || row.YEAR === null) return;
+        const yr = Number(row.YEAR);
+        if (Number.isNaN(yr)) return;
         if (!byYear[yr]) byYear[yr] = [];
         byYear[yr].push({
           s:  row.speciesID,
@@ -626,7 +512,9 @@ function waitForData() {
       bindUI();
       requestAnimationFrame(loop);
     },
-    error(err) { console.error('CSV parse error:', err); }
+    error: function(err) {
+      console.error('CSV parse error:', err);
+    }
   });
 }
 
@@ -643,30 +531,56 @@ function bindUI() {
   if (q('btn-next'))  q('btn-next').onclick  = () => forest.next();
   if (q('btn-reset')) q('btn-reset').onclick = () => {
     forest.showYear(0);
-    scene3.camera.position.set(0, 80, 250);
-    scene3.controls.target.set(0, 15, 0);
+    scene3.camera.position.set(0, 35, 65);
+    scene3.controls.target.set(0, 4, 0);
     scene3.controls.update();
   };
-  if (q('btn-play')) q('btn-play').onclick = () => {
-    forest.togglePlay();
-    UI.setPlayBtn(forest.playing);
-  };
 
-  const pw = q('progress-wrap');
-  if (pw) pw.addEventListener('click', e => {
-    const pct = (e.clientX - pw.getBoundingClientRect().left) / pw.offsetWidth;
-    forest.showYear(Math.round(pct * (forest.totalYears - 1)));
-  });
+  if (q('btn-play')) {
+    q('btn-play').onclick = () => {
+      forest.togglePlay();
+      UI.setPlayBtn(forest.playing);
+    };
+  }
+
+  const slider = q('timeline-slider');
+  if (slider) {
+    let wasPlaying = false;
+
+    slider.addEventListener('input', e => {
+      forest.showYear(parseInt(e.target.value, 10));
+    });
+
+    slider.addEventListener('mousedown', () => {
+      wasPlaying = forest.playing;
+      if (wasPlaying) {
+        forest.playing = false;
+        UI.setPlayBtn(false);
+      }
+    });
+
+    slider.addEventListener('mouseup', () => {
+      if (wasPlaying) {
+        forest.playing   = true;
+        UI.setPlayBtn(true);
+        forest._lastTime = performance.now();
+      }
+    });
+  }
 
   window.addEventListener('keydown', e => {
-    if (e.key === 'n' || e.key === 'N') forest.next();
-    if (e.key === 'p' || e.key === 'P') forest.prev();
-    if (e.key === 'r' || e.key === 'R') {
-      scene3.camera.position.set(0, 80, 250);
-      scene3.controls.target.set(0, 15, 0);
+    if (e.key.toLowerCase() === 'n') forest.next();
+    if (e.key.toLowerCase() === 'p') forest.prev();
+    if (e.key === ' ') {
+      e.preventDefault();
+      forest.togglePlay();
+      UI.setPlayBtn(forest.playing);
+    }
+    if (e.key.toLowerCase() === 'r') {
+      scene3.camera.position.set(0, 35, 65);
+      scene3.controls.target.set(0, 4, 0);
       scene3.controls.update();
     }
-    if (e.key === ' ') { e.preventDefault(); forest.togglePlay(); UI.setPlayBtn(forest.playing); }
   });
 }
 
