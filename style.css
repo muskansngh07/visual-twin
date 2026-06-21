@@ -18,7 +18,7 @@ body {
     color: var(--ui-text);
 }
 
-/* Master container separates screens from the control bar at bottom */
+/* Master container */
 #main-container {
     display: grid;
     grid-template-rows: 1fr auto;
@@ -28,14 +28,12 @@ body {
     gap: 10px;
 }
 
-
 canvas {
     display: block;
     width: 100%;
     height: 100%;
 }
 
-/* Ensure the parent viewport allows absolute children to bind to its boundaries */
 .viewport-box {
     position: relative;
     width: 100%;
@@ -46,17 +44,17 @@ canvas {
     background: #1e1e1e;
 }
 
-/* Profiles Wrapper - Pinned to the right edge and stacked vertically */
+/* Profiles Wrapper */
 #viewport-profiles {
     position: absolute;
     top: 15px;
     right: 15px;
     display: flex;
     flex-direction: column;
-    gap: 12px;         /* Space between the three boxes */
-    width: 240px;      /* Explicit width for the profile cards */
-    z-index: 10;       /* Sits above the 3D canvas rendering background */
-    pointer-events: none; /* Allows mouse drag/scroll to hit the Three.js canvas underneath */
+    gap: 12px;         
+    width: 240px;      
+    z-index: 10;       
+    pointer-events: none; 
 }
 
 /* Individual HUD Panels */
@@ -66,9 +64,8 @@ canvas {
     padding: 14px;
     border-radius: 6px;
     border: 1px solid rgba(255, 255, 255, 0.08);
-    pointer-events: auto; /* Restores clicking/hovering features exclusively on the card text */
+    pointer-events: auto; 
 }
-
 
 .hud-species-name {
     margin: 0 0 5px 0;
@@ -150,7 +147,11 @@ canvas {
     transition: left 0.15s;
 }
 
-#controls-row { display: flex; align-items: center; gap: 10px; }
+#controls-row { 
+    display: flex; 
+    align-items: center; 
+    gap: 10px; 
+}
 
 .btn {
     background: rgba(255,255,255,0.05);
@@ -164,15 +165,18 @@ canvas {
     transition: background 0.15s, border-color 0.15s;
     letter-spacing: 0.05em;
 }
+
 .btn:hover { 
     background: rgb(60, 173, 0); 
     border-color: rgba(255,255,255,0.2); 
 }
+
 .btn.active { 
     background: var(--ui-accent); 
     border-color: var(--ui-accent); 
     color: #ffffff; 
 }
+
 .btn-icon { 
     width: 35px; 
     height: 30px; 
@@ -193,5 +197,17 @@ canvas {
     font-family: var(--font-mono); font-size: 15px; color: var(--ui-muted);
     display: flex; gap: 16px; flex-wrap: wrap;
 }
-.key { display: inline-flex; align-items: center; gap: 4px; }
-.keycap { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 3px; padding: 1px 5px; font-size: 9px; }
+
+.key { 
+    display: inline-flex; 
+    align-items: center; 
+    gap: 4px; 
+}
+
+.keycap { 
+    background: rgba(255,255,255,0.08); 
+    border: 1px solid rgba(255,255,255,0.12); 
+    border-radius: 3px; 
+    padding: 1px 5px; 
+    font-size: 9px; 
+}
