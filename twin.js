@@ -1,12 +1,45 @@
-// PlantFATE Math - Preserved completely for exact mathematical scaling rules
+// Dedicated configuration parameters mapped to individual species IDs
+const SPECIES_CONFIGS = {
+  1: { 
+    Hm: 30, 
+    a: 75,  
+    c: 600, 
+    m: 2.0, 
+    n: 1.0, 
+    rho_s: 0.6, 
+    densityMultiplier: 80 
+  },
+  2: { 
+    Hm: 24, 
+    a: 110, 
+    c: 450, 
+    m: 1.8, 
+    n: 1.5, 
+    rho_s: 0.5, 
+    densityMultiplier: 80 
+  },
+  3: { 
+    Hm: 17, 
+    a: 100,  
+    c: 800, 
+    m: 2.2, 
+    n: 1.2, 
+    rho_s: 0.7, 
+    densityMultiplier: 80 
+  }
+};
+
+// PlantFATE Math
 class PlantFATEMath {
-  constructor(basalDiameter) {
-    this.Hm = 35;
-    this.a = 75;
-    this.c = 600;
-    this.m = 1.8;
-    this.n = 2.3;
-    this.rho_s = 0.6;
+  constructor(basalDiameter, speciesId = 1) {
+    const config = SPECIES_CONFIGS[speciesId] || SPECIES_CONFIGS[1];
+    
+    this.Hm = config.Hm; 
+    this.a = config.a;  
+    this.c = config.c; 
+    this.m = config.m;
+    this.n = config.n;
+    this.rho_s = config.rho_s;
     this.D = Number(basalDiameter);
 
     try {
@@ -24,12 +57,6 @@ class PlantFATEMath {
 
   calculateHeight() {
     return this.Hm * (1 - Math.exp((-this.a * this.D) / this.Hm));
-  }
-
-  calculateDBH() {
-    const H = this.calculateHeight();
-    if (H <= 1.3) return this.D * 0.85;
-    return this.stemRadiusAtHeight(1.3, H) * 2.0;
   }
 
   calculateCrownArea() {
@@ -80,10 +107,9 @@ class PlantFATEMath {
 // Initialize Texture Loader
 const _texLoader = new THREE.TextureLoader();
 
-// 1. Load crown textures properly
-const tree1 = _texLoader.load('images/leaves1.png');
-const tree2 = _texLoader.load('images/leaves2.png');
-const tree3 = _texLoader.load('images/leaves3.png');
+const tree1 = _texLoader.load('images/leaf1.jpg');
+const tree2 = _texLoader.load('images/leaf2.jpg');
+const tree3 = _texLoader.load('images/leaf3.jpg');
 
 const BARK_COLOR = {
   1: new THREE.Color(0x8B6340),
@@ -94,7 +120,6 @@ const BARK_COLOR = {
 const LEAF_MAT  = {};
 const BARK_MAT  = {};
 
-// 2. Setup materials correctly with texture references, transparency, and alpha testing
 [1, 2, 3].forEach(sid => {
   let activeTex = tree1;
   if (sid === 2) activeTex = tree2;
@@ -104,10 +129,12 @@ const BARK_MAT  = {};
     map: activeTex,
     side: THREE.DoubleSide,
     transparent: true,
-    alphaTest: 0.5 // Prevents depth-sorting artifacts in InstancedMesh layout
+    alphaTest: 0.5
   });
   
-  BARK_MAT[sid] = new THREE.MeshLambertMaterial({ color: BARK_COLOR[sid] });
+  BARK_MAT[sid] = new THREE.MeshLambertMaterial({ 
+    color: BARK_COLOR[sid] 
+  });
 });
 
 function buildCrownLathePts(pf, H, crownBaseZ, segments) {
@@ -116,43 +143,45 @@ function buildCrownLathePts(pf, H, crownBaseZ, segments) {
   for (let i = 0; i <= segments; i++) {
     const z = crownBaseZ + (i / segments) * (H - crownBaseZ);
     const r = Math.max(0, pf.calculateCrownRadiusAtHeight(z, H));
-    pts.push(new THREE.Vector2(r, z - crownBaseZ));
+    pts.push(new THREE.Vector2(r / pf.getMaxCrownRadius(), (z - crownBaseZ) / (H - crownBaseZ)));
   }
   return pts;
 }
 
-// Single trunk cylinder + lathe crown, both fully governed by PlantFATE math
-function buildMergedTreeGeo(D, speciesId) {
-  const sid = speciesId;
-  const pf  = new PlantFATEMath(D);
-  const H   = pf.calculateHeight();
-  if (H <= 0) return null;
-
-  // Crown base: zmratio inflection point; fallback to 35% of H if degenerate
-  const crownBaseZ  = (pf.zmratio > 0)
+function buildUnitTemplateGeometry(speciesId) {
+  const sampleDiameter = 1.0;
+  const pf = new PlantFATEMath(sampleDiameter, speciesId);
+  const H = pf.calculateHeight();
+  
+  const crownBaseZ = (pf.zmratio > 0)
     ? Math.max(0, Math.min(H * 0.85, H * pf.zmratio * 0.5))
     : H * 0.35;
   const trunkHeight = crownBaseZ;
 
-  // Trunk: single tapered cylinder from ground to crownBaseZ
-  const rBase    = pf.stemRadiusAtHeight(0,           H);
-  const rTop     = pf.stemRadiusAtHeight(trunkHeight, H);
-  const trunkGeo = new THREE.CylinderGeometry(rTop, rBase, trunkHeight, 8);
-  trunkGeo.translate(0, trunkHeight / 2, 0);
+  const rBase = pf.stemRadiusAtHeight(0, H) / (sampleDiameter / 2);
+  const rTop = pf.stemRadiusAtHeight(trunkHeight, H) / (sampleDiameter / 2);
+  const trunkGeo = new THREE.CylinderGeometry(rTop, rBase, 1.0, 8);
+  trunkGeo.translate(0, 0.5, 0); 
 
-  // Crown: LatheGeometry profile driven by m and n, lifted onto trunk top
   const lathePts = buildCrownLathePts(pf, H, crownBaseZ, 32);
   const crownGeo = new THREE.LatheGeometry(lathePts, 16);
-  crownGeo.translate(0, crownBaseZ, 0);
+  
+  // FIXED: Translate the canopy vertices upward in local space by the trunk height ratio
+  // This shifts the canopy mesh up while keeping the operational pivot point at (0,0,0)
+  const crownLength = H - trunkHeight;
+  if (crownLength > 0) {
+    const localOffsetT = trunkHeight / crownLength;
+    crownGeo.translate(0, localOffsetT, 0); 
+  }
 
-  const mergedBark = THREE.BufferGeometryUtils.mergeBufferGeometries([trunkGeo]);
-  const mergedLeaf = THREE.BufferGeometryUtils.mergeBufferGeometries([crownGeo]);
-
-  trunkGeo.dispose();
-  crownGeo.dispose();
-
-  return { bark: mergedBark, leaf: mergedLeaf };
+  return { trunkTemplate: trunkGeo, crownTemplate: crownGeo };
 }
+
+const SPECIES_TEMPLATES = {
+  1: buildUnitTemplateGeometry(1),
+  2: buildUnitTemplateGeometry(2),
+  3: buildUnitTemplateGeometry(3)
+};
 
 const LAND_AREA = 120 * 120;
 
@@ -197,7 +226,7 @@ class ForestScene {
     groundTex.wrapT = THREE.RepeatWrapping;
     groundTex.repeat.set(10, 10);
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(120, 120),
+      new THREE.PlaneGeometry(100, 100),
       new THREE.MeshLambertMaterial({ map: groundTex, color: 0x4a3728 })
     );
     ground.rotation.x = -Math.PI / 2;
@@ -223,8 +252,6 @@ class ForestManager {
 
     this.currentYearFloat = 0;
     this._lastTime        = null;
-
-    this.geometryCache = {};
   }
 
   init(data) {
@@ -237,17 +264,20 @@ class ForestManager {
     }
   }
 
+  // FIXED & HARDCODED: Structured spatial relaxation layout mapping
   _initPositions() {
-    const existingSpawns  = [];
-    const CONSTANT_BUFFER = 0.5;
-
     const maxCohortDiameters = {};
+    const cohortDensities = {};
+
     this.allYears.forEach(year => {
       const cohorts = this.data[year] || [];
       cohorts.forEach(co => {
         const key = `S${co.s}_C${co.c}`;
         if (!maxCohortDiameters[key] || co.bd > maxCohortDiameters[key]) {
           maxCohortDiameters[key] = co.bd;
+        }
+        if (!cohortDensities[key] || co.d > cohortDensities[key]) {
+          cohortDensities[key] = co.d;
         }
       });
     });
@@ -262,46 +292,63 @@ class ForestManager {
             key:   key,
             s:     co.s,
             c:     co.c,
-            d:     co.d,
+            d:     cohortDensities[key] || co.d,
             maxBd: maxCohortDiameters[key] || 0.1
           });
         }
       });
     });
 
-    masterCohortList.sort((a, b) => b.maxBd - a.maxBd);
+    const width = 100;
+    const height = 100;
+    
+    // Hard-coded clear trunk-to-trunk spacing buffer value
+    const MIN_DIST = 2.5; 
+    const allOccupiedPoints = [];
 
     masterCohortList.forEach(co => {
       if (this.positions[co.key]) return;
 
-      const evalMath           = new PlantFATEMath(co.maxBd);
-      const currentMaxCrownRad = evalMath.getMaxCrownRadius();
-      const maxCohortTrees     = Math.min(6, Math.max(1, Math.round(co.d * 100)));
-      this.positions[co.key]   = [];
+      const config = SPECIES_CONFIGS[co.s] || SPECIES_CONFIGS[1];
+      const maxCohortTrees = Math.max(1, Math.round(co.d * config.densityMultiplier));
+      this.positions[co.key] = [];
 
-      let attempts = 0;
-      while (this.positions[co.key].length < maxCohortTrees && attempts < 200) {
-        attempts++;
-        const candidateX = -50 + Math.random() * 100;
-        const candidateZ = -50 + Math.random() * 100;
-        let spatialViolation = false;
+      for (let i = 0; i < maxCohortTrees; i++) {
+        let finalX = 0;
+        let finalZ = 0;
+        let foundSafeSpot = false;
 
-        for (let s = 0; s < existingSpawns.length; s++) {
-          const activeSpawn = existingSpawns[s];
-          const dx = candidateX - activeSpawn[0];
-          const dz = candidateZ - activeSpawn[1];
-          const distance = Math.sqrt(dx * dx + dz * dz);
-          const minRequiredDistance = currentMaxCrownRad + activeSpawn[2] + CONSTANT_BUFFER;
-          if (distance < minRequiredDistance) {
-            spatialViolation = true;
+        for (let attempts = 0; attempts < 10; attempts++) {
+          const candidateX = Math.random() * width - 50; 
+          const candidateZ = Math.random() * height - 50;
+
+          let hasConflict = false;
+          for (let j = 0; j < allOccupiedPoints.length; j++) {
+            const p = allOccupiedPoints[j];
+            const dx = candidateX - p[0];
+            const dz = candidateZ - p[1];
+            if (dx * dx + dz * dz < MIN_DIST * MIN_DIST) {
+              hasConflict = true;
+              break; 
+            }
+          }
+
+          if (!hasConflict) {
+            finalX = candidateX;
+            finalZ = candidateZ;
+            foundSafeSpot = true;
             break;
           }
         }
 
-        if (!spatialViolation) {
-          this.positions[co.key].push([candidateX, candidateZ]);
-          existingSpawns.push([candidateX, candidateZ, currentMaxCrownRad]);
+        if (!foundSafeSpot) {
+          finalX = Math.random() * width - 50;
+          finalZ = Math.random() * height - 50;
         }
+
+        const pointPair = [finalX, finalZ];
+        this.positions[co.key].push(pointPair);
+        allOccupiedPoints.push(pointPair);
       }
     });
   }
@@ -348,6 +395,7 @@ class ForestManager {
     this._renderCurrentTimelineFrame();
   }
 
+  // FIXED: Smooth calculations, explicit cross product outward bending, loop safety guards intact
   _renderCurrentTimelineFrame() {
     const currentYearFloat = this.currentYearFloat;
     if (this.allYears.length === 0) return;
@@ -375,50 +423,165 @@ class ForestManager {
     const activeMathProfiles = { 1: null, 2: null, 3: null };
     const _up = new THREE.Vector3(0, 1, 0);
 
+    const activeInstances = [];
+
     cohortsA.forEach(cA => {
       const cB = cohortsB.find(c => c.s === cA.s && c.c === cA.c) || cA;
       const currentDiameter = cA.bd + (cB.bd - cA.bd) * t;
-      if (currentDiameter <= 0) return;
+      if (currentDiameter <= 0) return; 
 
       const sid = cA.s || 1;
+      const pf = new PlantFATEMath(currentDiameter, sid);
+      activeMathProfiles[sid] = pf;
 
-      if (!activeMathProfiles[sid]) {
-        activeMathProfiles[sid] = new PlantFATEMath(currentDiameter);
-      }
+      const H = pf.calculateHeight();
+      
+      // Safe skip condition (iterator block return)
+      if (H >= (pf.Hm * 0.98)) return; 
 
-      const stepDiameter = Math.round(currentDiameter * 100) / 100;
-      const cacheKey     = `${sid}_step_${stepDiameter.toFixed(2)}`;
+      const crownBaseZ = (pf.zmratio > 0)
+  ? Math.max(H * 0.45, Math.min(H * 0.80, H * pf.zmratio * 0.65))
+  : H * 0.50;
+      const trunkHeight = crownBaseZ;
+      const rBase = pf.stemRadiusAtHeight(0, H);
+      const maxCrownRadius = pf.getMaxCrownRadius();
 
-      if (!this.geometryCache[cacheKey]) {
-        this.geometryCache[cacheKey] = buildMergedTreeGeo(stepDiameter, sid);
-      }
-
-      const exactGeoPair = this.geometryCache[cacheKey];
-      if (!exactGeoPair) return;
-
-      const key    = `S${cA.s}_C${cA.c}`;
+      const key = `S${cA.s}_C${cA.c}`;
       const coords = this.positions[key] || [];
 
-      const barkIM = new THREE.InstancedMesh(exactGeoPair.bark, BARK_MAT[sid], coords.length);
-      const leafIM = new THREE.InstancedMesh(exactGeoPair.leaf, LEAF_MAT[sid], coords.length);
-
       coords.forEach(([x, z], cIdx) => {
-        const rotY   = (cA.c * 13.37) % (Math.PI * 2);
-        const matrix = new THREE.Matrix4().compose(
-          new THREE.Vector3(x, 0, z),
-          new THREE.Quaternion().setFromAxisAngle(_up, rotY),
-          new THREE.Vector3(1, 1, 1)
-        );
-        barkIM.setMatrixAt(cIdx, matrix);
-        leafIM.setMatrixAt(cIdx, matrix);
+        activeInstances.push({
+          x, z,
+          sid,
+          cohortNum: cA.c,
+          height: H,
+          trunkHeight,
+          rBase,
+          maxCrownRadius,
+          key,
+          cIdx,
+          templates: SPECIES_TEMPLATES[sid]
+        });
+      });
+    });
+
+    const instancedMeshGroups = {};
+    activeInstances.forEach(inst => {
+      if (!instancedMeshGroups[inst.key]) {
+        instancedMeshGroups[inst.key] = {
+          sid: inst.sid,
+          count: 0,
+          instances: [],
+          barkIM: new THREE.InstancedMesh(inst.templates.trunkTemplate, BARK_MAT[inst.sid], this.positions[inst.key].length),
+          leafIM: new THREE.InstancedMesh(inst.templates.crownTemplate, LEAF_MAT[inst.sid], this.positions[inst.key].length)
+        };
+      }
+      instancedMeshGroups[inst.key].instances.push(inst);
+    });
+
+    // Compute dynamic bending vectors based strictly on overlapping intersection area
+    activeInstances.forEach(treeA => {
+      treeA.bendAxis = new THREE.Vector3(0, 0, 1);
+      treeA.bendAngle = 0;
+
+      let totalWeightX = 0;
+      let totalWeightZ = 0;
+
+      activeInstances.forEach(treeB => {
+        if (treeA === treeB) return;
+
+        const dx = treeA.x - treeB.x;
+        const dz = treeA.z - treeB.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        
+        const rA = treeA.maxCrownRadius;
+        const rB = treeB.maxCrownRadius;
+        const radiusSum = rA + rB;
+
+        // Bending occurs if canopies overlap and treeA is shorter/smaller
+        if (distance < radiusSum && distance > 0.01 && treeA.height <= treeB.height) {
+          
+          let intersectionArea = 0;
+          const rA2 = rA * rA;
+          const rB2 = rB * rB;
+          
+          if (distance <= Math.abs(rA - rB)) {
+            intersectionArea = Math.PI * Math.pow(Math.min(rA, rB), 2);
+          } else {
+            const d2 = distance * distance;
+
+            const cosAlpha = Math.min(1, Math.max(-1, (rA2 + d2 - rB2) / (2 * rA * distance)));
+            const cosBeta  = Math.min(1, Math.max(-1, (rB2 + d2 - rA2) / (2 * rB * distance)));
+
+            const alpha = Math.acos(cosAlpha);
+            const beta = Math.acos(cosBeta);
+
+            const term1 = rA2 * alpha - rA2 * Math.sin(2 * alpha) / 2;
+            const term2 = rB2 * beta - rB2 * Math.sin(2 * beta) / 2;
+            
+            intersectionArea = Math.max(0, term1 + term2);
+          }
+
+          const totalAreaA = Math.PI * rA2;
+          const overlapRatio = totalAreaA > 0 ? (intersectionArea / totalAreaA) : 0;
+
+          if (overlapRatio > 0) {
+            totalWeightX += (dx / distance) * overlapRatio;
+            totalWeightZ += (dz / distance) * overlapRatio;
+          }
+        }
+      });
+
+      const pushLength = Math.sqrt(totalWeightX * totalWeightX + totalWeightZ * totalWeightZ);
+      if (pushLength > 0) {
+        const pushDir = new THREE.Vector3(totalWeightX / pushLength, 0, totalWeightZ / pushLength);
+        treeA.bendAngle = Math.min(0.44, pushLength * 0.35);
+
+        // Explicit structural cross-product forces authentic outward phototropic tilt curves
+        treeA.bendAxis.crossVectors(_up, pushDir).normalize();
+      }
+    });
+
+    // Process instanced mesh configurations with rigid trunks and flexible canopies
+    Object.keys(instancedMeshGroups).forEach(key => {
+      const group = instancedMeshGroups[key];
+      
+      group.instances.forEach(tree => {
+        const rotY = (tree.cohortNum * 13.37) % (Math.PI * 2);
+        const qtrSpin = new THREE.Quaternion().setFromAxisAngle(_up, rotY);
+        
+        // TRUNK REMAINS INTACT: Stands rigid and vertical
+        let qtrTotalTrunk = qtrSpin.clone();
+        
+        // CANOPY TILTS: Receives outward phototropic flex adjustments
+        let qtrTotalCrown = qtrSpin.clone();
+
+        if (tree.bendAngle > 0) {
+          const qtrTilt = new THREE.Quaternion().setFromAxisAngle(tree.bendAxis, tree.bendAngle);
+          qtrTotalCrown.premultiply(qtrTilt);
+        }
+
+        // Apply Trunk transforms (Stays vertical at ground level)
+        const trunkScale = new THREE.Vector3(tree.rBase * 2, tree.trunkHeight, tree.rBase * 2);
+        const trunkPos = new THREE.Vector3(tree.x, 0, tree.z);
+        const trunkMatrix = new THREE.Matrix4().compose(trunkPos, qtrTotalTrunk, trunkScale);
+        group.barkIM.setMatrixAt(tree.cIdx, trunkMatrix);
+
+        // FIXED: Scale, rotate, and position the canopy using the ground plane (Y = 0) as the pivot
+        const crownLength = tree.height - tree.trunkHeight;
+        const crownScale = new THREE.Vector3(tree.maxCrownRadius, crownLength, tree.maxCrownRadius);
+        
+        // Pivot from the absolute ground base instead of tree.trunkHeight
+        const crownPos = new THREE.Vector3(tree.x, 0, tree.z); 
+        const crownMatrix = new THREE.Matrix4().compose(crownPos, qtrTotalCrown, crownScale);
+        group.leafIM.setMatrixAt(tree.cIdx, crownMatrix);
         totalTreeCount++;
       });
 
-      barkIM.instanceMatrix.needsUpdate = true;
-      leafIM.instanceMatrix.needsUpdate = true;
-
-      this.forestGroup.add(barkIM);
-      this.forestGroup.add(leafIM);
+      group.barkIM.instanceMatrix.needsUpdate = true;
+      group.leafIM.instanceMatrix.needsUpdate = true;
+      this.forestGroup.add(group.barkIM);
+      this.forestGroup.add(group.leafIM);
     });
 
     UI.update(Math.floor(currentYearFloat), baseIdx, this.allYears.length, cohortsA);
@@ -441,20 +604,9 @@ class ForestManager {
     const statTrees = document.getElementById('stat-trees');
     if (statTrees) statTrees.textContent = totalTreeCount;
   }
-
-  clearCacheMemory() {
-    Object.keys(this.geometryCache).forEach(key => {
-      const pair = this.geometryCache[key];
-      if (pair) {
-        if (pair.bark) pair.bark.dispose();
-        if (pair.leaf) pair.leaf.dispose();
-      }
-      delete this.geometryCache[key];
-    });
-  }
 }
 
-// Resilient UI controller methods
+// UI controller methods
 const UI = {
   yearEl:   document.getElementById('year-display'),
   cohortEl: document.getElementById('year-cohort-line'),
@@ -502,7 +654,8 @@ function waitForData() {
           s:  row.speciesID,
           c:  row.cohortNum,
           d:  row.density,
-          bd: row.basal_diameter
+          bd: row.basal_diameter,
+          h:  row.height
         });
       });
 
