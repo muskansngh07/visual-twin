@@ -265,8 +265,8 @@ class PlantFATEMath {
     _initPositions() {
       const masterCohortList = [];
       const globalScaleFactor = 100;
-      const width = 110;
-      const height = 110;
+      const width = 100;
+      const height = 100;
   
       // Gathering cohort density specifications from CSV rows
       this.allYears.forEach(year => {
@@ -347,7 +347,6 @@ class PlantFATEMath {
       if (this.currentYearFloat >= endYear) {
         this.currentYearFloat = endYear;
         this.playing = false;
-        UI.setPlayBtn(false);
       }
   
       this._renderCurrentTimelineFrame();
@@ -528,7 +527,8 @@ class PlantFATEMath {
         this.forestGroup.add(group.leafIM);
       });
   
-      UI.update(Math.floor(currentYearFloat), baseIdx, this.allYears.length, cohortsA);
+      // Pass the numeric floor of the fractional playback year to the UI HUD
+      UI.update(Math.floor(currentYearFloat), cohortsA);
   
       [1, 2, 3].forEach(sid => {
         const pm       = activeMathProfiles[sid];
@@ -550,30 +550,14 @@ class PlantFATEMath {
     }
   }
   
-  // UI controller methods
+  // UI controller methods targeting HUD overlays
   const UI = {
-    yearEl:   document.getElementById('year-display'),
-    cohortEl: document.getElementById('year-cohort-line'),
-    sliderEl: document.getElementById('timeline-slider'),
-    statC:    document.getElementById('stat-cohorts'),
-    playBtn:  document.getElementById('btn-play'),
+    statY: document.getElementById('stat-year'),
+    statC: document.getElementById('stat-cohorts'),
   
-    update(year, index, total, cohorts) {
-      if (this.yearEl)   this.yearEl.textContent   = year;
-      if (this.cohortEl) this.cohortEl.textContent = `${cohorts.length} cohorts active`;
-      if (this.statC)    this.statC.textContent    = cohorts.length;
-      if (this.sliderEl) {
-        this.sliderEl.max   = total - 1;
-        this.sliderEl.value = index;
-        const percentage = total > 1 ? (index / (total - 1)) * 100 : 0;
-        this.sliderEl.style.setProperty('--progress', `${percentage}%`);
-      }
-    },
-  
-    setPlayBtn(playing) {
-      if (!this.playBtn) return;
-      this.playBtn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
-      this.playBtn.classList.toggle('active', playing);
+    update(year, cohorts) {
+      if (this.statY) this.statY.textContent = year;
+      if (this.statC) this.statC.textContent = cohorts.length;
     }
   };
   
@@ -624,56 +608,12 @@ class PlantFATEMath {
   }
   
   function bindUI() {
-    const q = id => document.getElementById(id);
-  
-    if (q('btn-prev'))  q('btn-prev').onclick  = () => forest.prev();
-    if (q('btn-next'))  q('btn-next').onclick  = () => forest.next();
-    if (q('btn-reset')) q('btn-reset').onclick = () => {
-      forest.showYear(0);
-      scene3.camera.position.set(0, 35, 65);
-      scene3.controls.target.set(0, 4, 0);
-      scene3.controls.update();
-    };
-  
-    if (q('btn-play')) {
-      q('btn-play').onclick = () => {
-        forest.togglePlay();
-        UI.setPlayBtn(forest.playing);
-      };
-    }
-  
-    const slider = q('timeline-slider');
-    if (slider) {
-      let wasPlaying = false;
-  
-      slider.addEventListener('input', e => {
-        forest.showYear(parseInt(e.target.value, 10));
-      });
-  
-      slider.addEventListener('mousedown', () => {
-        wasPlaying = forest.playing;
-        if (wasPlaying) {
-          forest.playing = false;
-          UI.setPlayBtn(false);
-        }
-      });
-  
-      slider.addEventListener('mouseup', () => {
-        if (wasPlaying) {
-          forest.playing   = true;
-          UI.setPlayBtn(true);
-          forest._lastTime = performance.now();
-        }
-      });
-    }
-  
     window.addEventListener('keydown', e => {
       if (e.key.toLowerCase() === 'n') forest.next();
       if (e.key.toLowerCase() === 'p') forest.prev();
       if (e.key === ' ') {
         e.preventDefault();
         forest.togglePlay();
-        UI.setPlayBtn(forest.playing);
       }
       if (e.key.toLowerCase() === 'r') {
         scene3.camera.position.set(0, 35, 65);
