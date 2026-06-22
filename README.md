@@ -1,6 +1,6 @@
 ## How to use:
 
-Ensure that the following files are in the same directory :
+Ensure that the following files are in the same folder :
  
 1. cohort_props.csv
 2. index.html
