@@ -611,10 +611,6 @@ class PlantFATEMath {
     window.addEventListener('keydown', e => {
       if (e.key.toLowerCase() === 'n') forest.next();
       if (e.key.toLowerCase() === 'p') forest.prev();
-      if (e.key === ' ') {
-        e.preventDefault();
-        forest.togglePlay();
-      }
       if (e.key.toLowerCase() === 'r') {
         scene3.camera.position.set(0, 35, 65);
         scene3.controls.target.set(0, 4, 0);
