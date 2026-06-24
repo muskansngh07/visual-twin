@@ -287,6 +287,9 @@ class ForestManager {
     }
 
     const speciesBins = { 1: [], 2: [], 3: [] };
+    
+    // NEW: Track the mathematical profiles active in this frame to push to HUD
+    const activeMathProfiles = { 1: null, 2: null, 3: null };
     let totalTreeCount = 0;
 
     cohorts.forEach(co => {
@@ -294,6 +297,9 @@ class ForestManager {
 
       const plotCount = Math.max(1, Math.round(co.d * 10000));
       const pf = new PlantFATEMath(co.bd, co.s);
+      
+      activeMathProfiles[co.s] = pf;
+
       const H = pf.calculateHeight();
       const crownBaseZ = (pf.zmratio > 0) ? Math.max(H * 0.20, Math.min(H * 0.85, H * pf.zmratio * 0.5)) : H * 0.30;
       const maxCrownRadius = pf.getMaxCrownRadius();
@@ -314,36 +320,61 @@ class ForestManager {
     [1, 2, 3].forEach(sid => {
       const activeAllocations = speciesBins[sid];
       if (activeAllocations.length === 0) return;
+      
       const totalSpeciesInstances = activeAllocations.reduce((sum, item) => sum + item.count, 0);
       const barkIM = new THREE.InstancedMesh(SPECIES_TEMPLATES[sid].trunkTemplate, BARK_MAT[sid], totalSpeciesInstances);
       const leafIM = new THREE.InstancedMesh(SPECIES_TEMPLATES[sid].crownTemplate, LEAF_MAT[sid], totalSpeciesInstances);
+      
       let instanceIdx = 0;
+      
       activeAllocations.forEach(treeGroup => {
         const crownLength = treeGroup.height - treeGroup.trunkHeight;
         const trunkThickness = treeGroup.pf.D * 4.0; 
         const permanentPool = this.cohortPositionsMap[treeGroup.cohortKey];
+        
         for (let i = 0; i < treeGroup.count; i++) {
           const pos = permanentPool[i]; 
+          
           const trunkMatrix = new THREE.Matrix4().compose(
             new THREE.Vector3(pos.x, 0, pos.z),
             new THREE.Quaternion().setFromAxisAngle(_up, pos.rotY),
             new THREE.Vector3(trunkThickness, treeGroup.trunkHeight, trunkThickness)
           );
+          
           const leafMatrix = new THREE.Matrix4().compose(
             new THREE.Vector3(pos.x, treeGroup.trunkHeight, pos.z),
             new THREE.Quaternion().setFromAxisAngle(_up, pos.rotY),
             new THREE.Vector3(treeGroup.maxCrownRadius * 2.0, crownLength, treeGroup.maxCrownRadius * 2.0)
           );
+          
           barkIM.setMatrixAt(instanceIdx, trunkMatrix);
           leafIM.setMatrixAt(instanceIdx, leafMatrix);
           instanceIdx++;
         }
       });
+      
       barkIM.instanceMatrix.needsUpdate = true;
       leafIM.instanceMatrix.needsUpdate = true;
       this.forestGroup.add(barkIM);
       this.forestGroup.add(leafIM);
     });
+
+    [1, 2, 3].forEach(sid => {
+      const pm       = activeMathProfiles[sid];
+      const shapeMEl = document.getElementById(`s${sid}-shape-m`);
+      const shapeNEl = document.getElementById(`s${sid}-shape-n`);
+
+      if (pm) {
+        if (shapeMEl) shapeMEl.textContent = pm.m.toFixed(1);
+        if (shapeNEl) shapeNEl.textContent = pm.n.toFixed(1);
+      } 
+      else {
+        const fallbackConfig = SPECIES_CONFIGS[sid];
+        if (shapeMEl && fallbackConfig) shapeMEl.textContent = fallbackConfig.m.toFixed(1);
+        if (shapeNEl && fallbackConfig) shapeNEl.textContent = fallbackConfig.n.toFixed(1);
+      }
+    });
+
     UI.update(currentYear, cohorts, totalTreeCount);
   }
 }
