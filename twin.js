@@ -412,9 +412,12 @@ const UI = {
   statTrees: document.getElementById('stat-trees'),
 
   update(year, activeCohortCount, calculatedTrees) {
-    if (this.statY) this.statY.textContent = year;
-    if (this.statC) this.statC.textContent = activeCohortCount; 
-    if (this.statTrees) this.statTrees.textContent = calculatedTrees;
+    if (this.statY) 
+      this.statY.textContent = Math.round(year);
+    if (this.statC) 
+      this.statC.textContent = activeCohortCount; 
+    if (this.statTrees) 
+      this.statTrees.textContent = calculatedTrees;
   }
 };
 
