@@ -1,7 +1,28 @@
 const SPECIES_CONFIGS = {
-  1: { Hm: 30, a: 75,  c: 600, m: 2.0, n: 1.0, rho_s: 0.6 },
-  2: { Hm: 24, a: 110, c: 450, m: 1.8, n: 1.5, rho_s: 0.5 },
-  3: { Hm: 17, a: 100, c: 800, m: 2.2, n: 1.2, rho_s: 0.7 }
+  1: { 
+    Hm: 30, 
+    a: 75,  
+    c: 600, 
+    m: 2.0, 
+    n: 1.0, 
+    rho_s: 0.6 
+  },
+  2: { 
+    Hm: 24, 
+    a: 110, 
+    c: 450, 
+    m: 1.8, 
+    n: 1.5, 
+    rho_s: 0.5 
+  },
+  3: { 
+    Hm: 17, 
+    a: 100, 
+    c: 800, 
+    m: 2.2, 
+    n: 1.2, 
+    rho_s: 0.7 
+  }
 };
 
 // PlantFATE Math
@@ -116,7 +137,6 @@ function buildCrownLathePts(pf, H, crownBaseZ, segments) {
   return pts;
 }
 
-
 function buildUnitTemplateGeometry(speciesId) {
   const sampleDiameter = 1.0;
   const pf = new PlantFATEMath(sampleDiameter, speciesId);
@@ -216,6 +236,8 @@ class ForestManager {
     this.allYears.forEach(year => {
       const cohorts = this.data[year] || [];
       cohorts.forEach(co => {
+        if (co.c === 0) return;
+
         const cohortKey = `S${co.s}_C${co.c}`; 
         if (!this.cohortPositionsMap[cohortKey]) {
           const dedicatedCoords = [];
@@ -287,14 +309,14 @@ class ForestManager {
     }
 
     const speciesBins = { 1: [], 2: [], 3: [] };
-    
-    // NEW: Track the mathematical profiles active in this frame to push to HUD
     const activeMathProfiles = { 1: null, 2: null, 3: null };
     let totalTreeCount = 0;
+    let nonZeroCohortCount = 0;
 
     cohorts.forEach(co => {
-      if (co.bd <= 0 || co.d <= 0) return;
+      if (co.c === 0 || co.bd <= 0 || co.d <= 0) return;
 
+      nonZeroCohortCount++;
       const plotCount = Math.max(1, Math.round(co.d * 10000));
       const pf = new PlantFATEMath(co.bd, co.s);
       
@@ -332,8 +354,12 @@ class ForestManager {
         const trunkThickness = treeGroup.pf.D * 4.0; 
         const permanentPool = this.cohortPositionsMap[treeGroup.cohortKey];
         
+        // Safety validation in case a tracking key coordinate set wasn't registered
+        if (!permanentPool) return;
+
         for (let i = 0; i < treeGroup.count; i++) {
           const pos = permanentPool[i]; 
+          if (!pos) break;
           
           const trunkMatrix = new THREE.Matrix4().compose(
             new THREE.Vector3(pos.x, 0, pos.z),
@@ -375,7 +401,7 @@ class ForestManager {
       }
     });
 
-    UI.update(currentYear, cohorts, totalTreeCount);
+    UI.update(currentYear, nonZeroCohortCount, totalTreeCount);
   }
 }
 
@@ -385,9 +411,9 @@ const UI = {
   statC: document.getElementById('stat-cohorts'),
   statTrees: document.getElementById('stat-trees'),
 
-  update(year, cohorts, calculatedTrees) {
+  update(year, activeCohortCount, calculatedTrees) {
     if (this.statY) this.statY.textContent = year;
-    if (this.statC) this.statC.textContent = cohorts.length; 
+    if (this.statC) this.statC.textContent = activeCohortCount; 
     if (this.statTrees) this.statTrees.textContent = calculatedTrees;
   }
 };
@@ -410,9 +436,10 @@ function waitForData() {
         const yr = Number(row.YEAR);
         if (Number.isNaN(yr)) return;
         if (!byYear[yr]) byYear[yr] = [];
+        
         byYear[yr].push({
           s:  row.speciesID,
-          c:  row.cohortNum,
+          c:  row.cohortID, 
           d:  row.density,
           bd: row.basal_diameter,
           h:  row.height
